@@ -14,7 +14,6 @@ import androidx.activity.result.contract.ActivityResultContracts.StartActivityFo
 import androidx.core.content.ContextCompat
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.Preference
-import androidx.preference.PreferenceManager
 import androidx.preference.SwitchPreferenceCompat
 import androidx.preference.PreferenceFragmentCompat
 import kittoku.osc.R
@@ -25,6 +24,7 @@ import kittoku.osc.preference.OscPrefKey
 import kittoku.osc.preference.accessor.setURIPrefValue
 import kittoku.osc.preference.custom.DirectoryPreference
 import kittoku.osc.preference.custom.RouteSelectedAppsPreference
+import kittoku.osc.service.AutoConnectService
 
 
 internal class SettingFragment : PreferenceFragmentCompat() {
@@ -121,31 +121,20 @@ internal class SettingFragment : PreferenceFragmentCompat() {
             findPreference<SwitchPreferenceCompat>(key.name)?.setOnPreferenceChangeListener { _, value ->
                 val enabled = value as Boolean
                 prefs.edit().putBoolean(key.name, enabled).apply()
-                if (enabled) {
-                    requestBackgroundPermissions(
-                        key == OscPrefKey.AUTO_CONNECT_WIFI_ALLOW ||
-                            key == OscPrefKey.AUTO_CONNECT_WIFI_DENY
-                    )
-                }
+                if (enabled) requestBackgroundPermissions(
+                    key == OscPrefKey.AUTO_CONNECT_WIFI_ALLOW || key == OscPrefKey.AUTO_CONNECT_WIFI_DENY
+                )
                 syncAutoConnect()
                 true
             }
         }
-
-        findPreference<MultiSelectListPreference>(OscPrefKey.AUTO_WIFI_ALLOW_SSIDS.name)?.let { preference ->
-            preference.onPreferenceClickListener = Preference.OnPreferenceClickListener {
-                refreshWifi(preference)
-                false
-            }
-            updateSummary(preference)
+        findPreference<MultiSelectListPreference>(OscPrefKey.AUTO_WIFI_ALLOW_SSIDS.name)?.let { p ->
+            p.onPreferenceClickListener = Preference.OnPreferenceClickListener { refreshWifi(p); false }
+            updateSummary(p)
         }
-
-        findPreference<MultiSelectListPreference>(OscPrefKey.AUTO_WIFI_DENY_SSIDS.name)?.let { preference ->
-            preference.onPreferenceClickListener = Preference.OnPreferenceClickListener {
-                refreshWifi(preference)
-                false
-            }
-            updateSummary(preference)
+        findPreference<MultiSelectListPreference>(OscPrefKey.AUTO_WIFI_DENY_SSIDS.name)?.let { p ->
+            p.onPreferenceClickListener = Preference.OnPreferenceClickListener { refreshWifi(p); false }
+            updateSummary(p)
         }
     }
 
@@ -156,7 +145,6 @@ internal class SettingFragment : PreferenceFragmentCompat() {
             prefs.getBoolean(OscPrefKey.AUTO_CONNECT_WIFI_ALLOW.name, false) ||
             prefs.getBoolean(OscPrefKey.AUTO_CONNECT_WIFI_DENY.name, false) ||
             prefs.getBoolean(OscPrefKey.AUTO_DISCONNECT_WIFI.name, false)
-
         val context = requireContext().applicationContext
         if (enabled) AutoConnectService.ensureRunning(context) else AutoConnectService.stop(context)
     }
@@ -164,81 +152,49 @@ internal class SettingFragment : PreferenceFragmentCompat() {
     private fun requestBackgroundPermissions(wifiRequired: Boolean) {
         val a = activity ?: return
         val missing = mutableListOf<String>()
-
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(a, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(a, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             missing += Manifest.permission.POST_NOTIFICATIONS
-        }
-
         if (wifiRequired) {
-            if (Build.VERSION.SDK_INT >= 33 &&
-                ContextCompat.checkSelfPermission(a, Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED
-            ) {
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(a, Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED)
                 missing += Manifest.permission.NEARBY_WIFI_DEVICES
-            }
-            if (ContextCompat.checkSelfPermission(a, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            if (ContextCompat.checkSelfPermission(a, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)
                 missing += Manifest.permission.ACCESS_FINE_LOCATION
-            }
         }
-
         if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), REQUEST_PERMISSIONS)
-
         if (Build.VERSION.SDK_INT >= 23) {
             val pm = a.getSystemService(PowerManager::class.java)
-            if (!pm.isIgnoringBatteryOptimizations(a.packageName)) {
-                runCatching {
-                    startActivity(
-                        Intent(
-                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                            Uri.parse("package:" + a.packageName)
-                        )
-                    )
-                }
+            if (!pm.isIgnoringBatteryOptimizations(a.packageName)) runCatching {
+                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + a.packageName)))
             }
         }
     }
 
-    private fun refreshWifi(preference: MultiSelectListPreference) {
-        if (ContextCompat.checkSelfPermission(
-                requireContext(),
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            preference.entries = arrayOf("Grant Location permission to read Wi-Fi SSIDs")
-            preference.entryValues = arrayOf("__permission__")
+    private fun refreshWifi(p: MultiSelectListPreference) {
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            p.entries = arrayOf("Grant Location permission to read Wi-Fi SSIDs")
+            p.entryValues = arrayOf("__permission__")
             return
         }
-
-        val wifiManager = requireContext().getSystemService(android.net.wifi.WifiManager::class.java)
-        runCatching { wifiManager?.startScan() }
-
-        val saved = preference.values
-        val scanned = runCatching {
-            wifiManager?.scanResults.orEmpty()
-                .map { it.SSID.trim() }
-                .filter { it.isNotEmpty() && it != "<unknown ssid>" }
-        }.getOrDefault(emptyList())
-
+        val wm = requireContext().getSystemService(android.net.wifi.WifiManager::class.java)
+        runCatching { wm?.startScan() }
+        val saved = p.values
+        val scanned = runCatching { wm?.scanResults.orEmpty().map { it.SSID.trim() }.filter { it.isNotEmpty() && it != "<unknown ssid>" } }.getOrDefault(emptyList())
         val ssids = (scanned + saved).filter { it.isNotBlank() }.distinct().sorted()
-
         if (ssids.isEmpty()) {
-            preference.entries = arrayOf("No Wi-Fi SSIDs found in the latest scan")
-            preference.entryValues = arrayOf("__empty__")
+            p.entries = arrayOf("No Wi-Fi SSIDs found in the latest scan")
+            p.entryValues = arrayOf("__empty__")
         } else {
-            preference.entries = ssids.toTypedArray()
-            preference.entryValues = ssids.toTypedArray()
+            p.entries = ssids.toTypedArray()
+            p.entryValues = ssids.toTypedArray()
         }
     }
 
-    private fun updateSummary(preference: MultiSelectListPreference) {
-        val count = preference.values.size
-        preference.summary = if (count == 0) "No networks selected" else "$count network(s) selected"
+    private fun updateSummary(p: MultiSelectListPreference) {
+        val count = p.values.size
+        p.summary = if (count == 0) "No networks selected" else "$count network(s) selected"
     }
 
-    companion object {
-        private const val REQUEST_PERMISSIONS = 1107
-    }
+    companion object { private const val REQUEST_PERMISSIONS = 1107 }
 
 }
 
