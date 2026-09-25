@@ -57,7 +57,7 @@ internal enum class OscPrefKey {
     AUTO_CONNECT_WIFI_DENY,
     AUTO_DISCONNECT_WIFI,
     AUTO_WIFI_ALLOW_SSIDS,
-    AUTO_WIFI_DENY_SSIDS,
+    AUTO_WIFI_DENY_SSIDS
 }
 
 internal val DEFAULT_BOOLEAN_MAP = mapOf(
@@ -140,3 +140,4 @@ internal val DEFAULT_URI_MAP = mapOf<OscPrefKey, Uri?>(
 
 internal const val TEMP_KEY_HEADER = "_"
 internal const val PROFILE_KEY_HEADER = "PROFILE."
+
