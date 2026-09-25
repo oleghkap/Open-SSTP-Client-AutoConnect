@@ -1,6 +1,7 @@
 package kittoku.osc.preference.custom
 
 import android.content.Context
+import kittoku.osc.R
 import android.text.InputType
 import android.util.AttributeSet
 import androidx.preference.EditTextPreference
