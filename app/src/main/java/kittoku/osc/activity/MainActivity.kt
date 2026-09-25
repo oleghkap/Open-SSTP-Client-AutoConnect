@@ -65,11 +65,11 @@ class MainActivity : AppCompatActivity() {
             }
 
             if (profile == null) {
-                Toast.makeText(this, "IMPORT FAILED", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_import_failed), Toast.LENGTH_SHORT).show()
             } else {
                 importProfile(profile,prefs)
                 updatePreferenceView()
-                Toast.makeText(this, "PROFILE IMPORTED", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_profile_imported), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -82,7 +82,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            Toast.makeText(this, "PROFILE EXPORTED", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_profile_exported), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -134,8 +134,8 @@ class MainActivity : AppCompatActivity() {
 
         TabLayoutMediator(binding.tabBar, binding.pager) { tab, position ->
             tab.text = when (position) {
-                0 -> "HOME"
-                1 -> "SETTING"
+                0 -> getString(R.string.tab_home)
+                1 -> getString(R.string.tab_settings)
                 else -> throw NotImplementedError(position.toString())
             }
         }.attach()
@@ -193,7 +193,7 @@ class MainActivity : AppCompatActivity() {
                 "If duplicated, the profile will be overwritten."
             ))
 
-            it.setPositiveButton("SAVE") { _, _ ->
+            it.setPositiveButton(R.string.button_save) { _, _ ->
                 prefs.edit().also { editor ->
                     editor.putString(
                         PROFILE_KEY_HEADER + editText.text.ifEmpty { hostname },
@@ -202,10 +202,10 @@ class MainActivity : AppCompatActivity() {
                     editor.apply()
                 }
 
-                Toast.makeText(this, "PROFILE SAVED", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_profile_saved), Toast.LENGTH_SHORT).show()
             }
 
-            it.setNegativeButton("CANCEL") { _, _ -> }
+            it.setNegativeButton(R.string.button_cancel) { _, _ -> }
 
             it.show()
         }
@@ -219,11 +219,11 @@ class MainActivity : AppCompatActivity() {
                 "Password will be also exported as plain text. If you don't want that, blank Password before exporting."
             )
 
-            it.setPositiveButton("PROCEED") { _, _ ->
+            it.setPositiveButton(R.string.button_proceed) { _, _ ->
                 exportLauncher.launch(filename)
             }
 
-            it.setNegativeButton("CANCEL") { _, _ -> }
+            it.setNegativeButton(R.string.button_cancel) { _, _ -> }
 
             it.show()
         }
@@ -231,17 +231,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun showReloadDialog() {
         AlertDialog.Builder(this).also {
-            it.setMessage("Are you sure to reload the default settings?")
+            it.setMessage(getString(R.string.dialog_reload_defaults))
 
-            it.setPositiveButton("YES") { _, _ ->
+            it.setPositiveButton(R.string.button_yes) { _, _ ->
                 importProfile(null, prefs)
 
                 updatePreferenceView()
 
-                Toast.makeText(this, "DEFAULTS RELOADED", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_defaults_reloaded), Toast.LENGTH_SHORT).show()
             }
 
-            it.setNegativeButton("NO") { _, _ -> }
+            it.setNegativeButton(R.string.button_no) { _, _ -> }
 
             it.show()
         }

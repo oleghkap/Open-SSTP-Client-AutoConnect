@@ -9,10 +9,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.net.VpnService
-import android.net.wifi.WifiInfo
 import android.os.Build
 import android.service.quicksettings.TileService
 import androidx.core.app.ActivityCompat
@@ -25,6 +22,9 @@ import kittoku.osc.SharedBridge
 import kittoku.osc.control.Controller
 import kittoku.osc.control.LogWriter
 import kittoku.osc.preference.OscPrefKey
+import kittoku.osc.preference.PROFILE_KEY_HEADER
+import kittoku.osc.preference.serializeProfile
+import kittoku.osc.preference.accessor.getStringPrefValue
 import kittoku.osc.preference.accessor.getBooleanPrefValue
 import kittoku.osc.preference.accessor.getIntPrefValue
 import kittoku.osc.preference.accessor.getURIPrefValue
@@ -107,7 +107,7 @@ internal class SstpVpnService : VpnService() {
             ACTION_VPN_CONNECT -> {
                 controller?.kill(false, null)
 
-                beForegrounded("Соединение")
+                beForegrounded(getString(R.string.notification_connecting))
                 resetReconnectionLife(prefs)
                 if (getBooleanPrefValue(OscPrefKey.LOG_DO_SAVE_LOG, prefs)) {
                     prepareLogWriter()
@@ -203,7 +203,7 @@ internal class SstpVpnService : VpnService() {
                 NOTIFICATION_DISCONNECT_CHANNEL,
                 NOTIFICATION_CERTIFICATE_CHANNEL,
             ).map {
-                NotificationChannel(it, it, NotificationManager.IMPORTANCE_DEFAULT)
+                NotificationChannel(it, notificationChannelName(it), NotificationManager.IMPORTANCE_DEFAULT)
             }.also {
                 notificationManager.createNotificationChannels(it)
             }
@@ -216,11 +216,11 @@ internal class SstpVpnService : VpnService() {
     }
 
     internal fun notifyConnecting() {
-        updateMainNotification("Соединение")
+        updateMainNotification(getString(R.string.notification_connecting))
     }
 
     internal fun notifyConnected() {
-        updateMainNotification("Соединено")
+        updateMainNotification(getString(R.string.notification_connected))
     }
 
     private fun updateMainNotification(status: String) {
@@ -240,39 +240,26 @@ internal class SstpVpnService : VpnService() {
             it.setOngoing(true)
             it.setAutoCancel(false)
             it.setSmallIcon(R.drawable.ic_baseline_vpn_lock_24)
-            it.setContentTitle(status)
-            it.setContentText(currentNetworkLabel())
+            it.setContentTitle(currentProfileName() + " — " + status)
             it.setOnlyAlertOnce(true)
-            it.addAction(R.drawable.ic_baseline_close_24, "DISCONNECT", pendingIntent)
+            it.addAction(R.drawable.ic_baseline_close_24, getString(R.string.notification_action_disconnect), pendingIntent)
         }
     }
 
-    private fun currentNetworkLabel(): String {
-        val cm = getSystemService(ConnectivityManager::class.java)
-        val candidates = cm.allNetworks.mapNotNull { network ->
-            val capabilities = cm.getNetworkCapabilities(network) ?: return@mapNotNull null
-            if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN) ||
-                !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            ) return@mapNotNull null
-            network to capabilities
-        }.sortedByDescending {
-            it.second.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-        }
+    private fun currentProfileName(): String {
+        val current = serializeProfile(prefs)
+        prefs.all.entries.firstOrNull { entry ->
+            entry.key.startsWith(PROFILE_KEY_HEADER) && entry.value is String && entry.value == current
+        }?.key?.substringAfter(PROFILE_KEY_HEADER)?.takeIf { it.isNotBlank() }?.let { return it }
+        return getStringPrefValue(OscPrefKey.HOME_HOSTNAME, prefs).ifBlank { getString(R.string.app_name) }
+    }
 
-        val capabilities = candidates.firstOrNull()?.second ?: return "Сеть не определена"
-
-        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-            val info = capabilities.transportInfo as? WifiInfo
-            val ssid = info?.ssid?.trim('"')?.trim()
-            if (!ssid.isNullOrBlank() && ssid != "<unknown ssid>") return "Wi-Fi: $ssid"
-            return "Wi-Fi"
-        }
-
-        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
-            return "Мобильная сеть"
-        }
-
-        return "Сеть подключена"
+    private fun notificationChannelName(channel: String): String = when (channel) {
+        NOTIFICATION_ERROR_CHANNEL -> getString(R.string.notification_channel_error)
+        NOTIFICATION_RECONNECT_CHANNEL -> getString(R.string.notification_channel_reconnect)
+        NOTIFICATION_DISCONNECT_CHANNEL -> getString(R.string.notification_channel_disconnect)
+        NOTIFICATION_CERTIFICATE_CHANNEL -> getString(R.string.notification_channel_certificate)
+        else -> channel
     }
 
     internal fun notifyMessage(message: String, id: Int, channel: String) {

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
-    <PreferenceCategory android:title="SSL Layer">
+    <PreferenceCategory android:title="@string/settings_ssl_layer">
         <kittoku.osc.preference.custom.SSLPortPreference android:key="SSL_PORT"/>
         <kittoku.osc.preference.custom.SSLVersionPreference android:key="SSL_VERSION"/>
         <kittoku.osc.preference.custom.SSLDoVerifyPreference android:key="SSL_DO_VERIFY"/>
@@ -11,33 +11,33 @@
         <kittoku.osc.preference.custom.SSLDoUseCustomSNIPreference android:key="SSL_DO_USE_CUSTOM_SNI"/>
         <kittoku.osc.preference.custom.SSLCustomSNIHostnamePreference android:key="SSL_CUSTOM_SNI"/>
     </PreferenceCategory>
-    <PreferenceCategory android:title="HTTP Proxy">
+    <PreferenceCategory android:title="@string/settings_http_proxy">
         <kittoku.osc.preference.custom.ProxyDoUseProxyPreference android:key="PROXY_DO_USE_PROXY"/>
         <kittoku.osc.preference.custom.ProxyHostnamePreference android:key="PROXY_HOSTNAME"/>
         <kittoku.osc.preference.custom.ProxyPortPreference android:key="PROXY_PORT"/>
         <kittoku.osc.preference.custom.ProxyUsernamePreference android:key="PROXY_USERNAME"/>
         <kittoku.osc.preference.custom.ProxyPasswordPreference android:key="PROXY_PASSWORD"/>
     </PreferenceCategory>
-    <PreferenceCategory android:title="PPP Layer">
+    <PreferenceCategory android:title="@string/settings_ppp_layer">
         <kittoku.osc.preference.custom.PPPMruPreference android:key="PPP_MRU"/>
         <kittoku.osc.preference.custom.PPPMtuPreference android:key="PPP_MTU"/>
     </PreferenceCategory>
-    <PreferenceCategory android:title="PPP Authentication Protocol">
+    <PreferenceCategory android:title="@string/settings_ppp_auth">
         <kittoku.osc.preference.custom.PPPAuthProtocolsPreference android:key="PPP_AUTH_PROTOCOLS"/>
         <kittoku.osc.preference.custom.PPPAuthTimeoutPreference android:key="PPP_AUTH_TIMEOUT"/>
     </PreferenceCategory>
-    <PreferenceCategory android:title="PPP Network Protocol">
+    <PreferenceCategory android:title="@string/settings_ppp_network">
         <kittoku.osc.preference.custom.PPPIPv4EnabledPreference android:key="PPP_IPv4_ENABLED"/>
         <kittoku.osc.preference.custom.PPPDoRequestStaticIPv4AddressPreference android:key="PPP_DO_REQUEST_STATIC_IPv4_ADDRESS"/>
         <kittoku.osc.preference.custom.PPPStaticIPv4AddressPreference android:key="PPP_STATIC_IPv4_ADDRESS"/>
         <kittoku.osc.preference.custom.PPPIPv6EnabledPreference android:key="PPP_IPv6_ENABLED"/>
     </PreferenceCategory>
-    <PreferenceCategory android:title="DNS Server">
+    <PreferenceCategory android:title="@string/settings_dns">
         <kittoku.osc.preference.custom.DNSDoRequestAddressPreference android:key="DNS_DO_REQUEST_ADDRESS"/>
         <kittoku.osc.preference.custom.DNSDoUseCustomServerPreference android:key="DNS_DO_USE_CUSTOM_SERVER"/>
         <kittoku.osc.preference.custom.DNSCustomAddressPreference android:key="DNS_CUSTOM_ADDRESS"/>
     </PreferenceCategory>
-    <PreferenceCategory android:title="Routing">
+    <PreferenceCategory android:title="@string/settings_routing">
         <kittoku.osc.preference.custom.RouteDoAddDefaultRoutePreference android:key="ROUTE_DO_ADD_DEFAULT_ROUTE"/>
         <kittoku.osc.preference.custom.RouteDoRoutePrivateAddresses android:key="ROUTE_DO_ROUTE_PRIVATE_ADDRESSES"/>
         <kittoku.osc.preference.custom.RouteDoAddCustomRoutesPreference android:key="ROUTE_DO_ADD_CUSTOM_ROUTES"/>
@@ -45,24 +45,24 @@
         <kittoku.osc.preference.custom.RouteDoEnableAppBasedRulePreference android:key="ROUTE_DO_ENABLE_APP_BASED_RULE"/>
         <kittoku.osc.preference.custom.RouteSelectedAppsPreference android:key="ROUTE_SELECTED_APPS"/>
     </PreferenceCategory>
-    <PreferenceCategory android:title="Reconnection">
+    <PreferenceCategory android:title="@string/settings_reconnection">
         <kittoku.osc.preference.custom.ReconnectionEnabledPreference android:key="RECONNECTION_ENABLED"/>
         <kittoku.osc.preference.custom.ReconnectionCountPreference android:key="RECONNECTION_COUNT"/>
         <kittoku.osc.preference.custom.ReconnectionIntervalPreference android:key="RECONNECTION_INTERVAL"/>
     </PreferenceCategory>
-    <PreferenceCategory android:title="Log">
+    <PreferenceCategory android:title="@string/settings_log">
         <kittoku.osc.preference.custom.LogDoSaveLogPreference android:key="LOG_DO_SAVE_LOG"/>
         <kittoku.osc.preference.custom.LogDirPreference android:key="LOG_DIR"/>
     </PreferenceCategory>
-    <PreferenceCategory android:title="Auto-connect">
-        <androidx.preference.SwitchPreferenceCompat android:key="AUTO_CONNECT_DISABLED" android:title="Disable automatic connection" android:summary="Blocks automatic VPN connections triggered by network changes" android:defaultValue="false" />
-        <androidx.preference.SwitchPreferenceCompat android:key="AUTO_CONNECT_MOBILE" android:title="Connect automatically on mobile network" android:summary="Connect when the phone switches to cellular data, including while the app is closed" android:defaultValue="false" />
-        <androidx.preference.SwitchPreferenceCompat android:key="AUTO_DISCONNECT_MOBILE" android:title="Disconnect when mobile network is disconnected" android:summary="Disconnect the SSTP tunnel when the cellular network is lost" android:defaultValue="false" />
-        <androidx.preference.SwitchPreferenceCompat android:key="AUTO_CONNECT_WIFI_ALLOW" android:title="Connect only on selected Wi-Fi networks" android:summary="Connect automatically only when the current Wi-Fi SSID is in the allow list" android:defaultValue="false" />
-        <androidx.preference.MultiSelectListPreference android:key="AUTO_WIFI_ALLOW_SSIDS" android:title="Allowed Wi-Fi networks" android:summary="Select SSIDs allowed to trigger automatic connection" android:dependency="AUTO_CONNECT_WIFI_ALLOW" />
-        <androidx.preference.SwitchPreferenceCompat android:key="AUTO_CONNECT_WIFI_DENY" android:title="Do not connect on selected Wi-Fi networks" android:summary="Connect automatically on Wi-Fi except for SSIDs in the deny list" android:defaultValue="false" />
-        <androidx.preference.MultiSelectListPreference android:key="AUTO_WIFI_DENY_SSIDS" android:title="Blocked Wi-Fi networks" android:summary="Select SSIDs that must never trigger automatic connection" android:dependency="AUTO_CONNECT_WIFI_DENY" />
-        <androidx.preference.SwitchPreferenceCompat android:key="AUTO_DISCONNECT_WIFI" android:title="Disconnect when Wi-Fi is disconnected" android:summary="Disconnect the SSTP tunnel when the active Wi-Fi network is lost" android:defaultValue="false" />
+    <PreferenceCategory android:title="@string/settings_auto_connect">
+        <androidx.preference.SwitchPreferenceCompat android:key="AUTO_CONNECT_DISABLED" android:title="@string/auto_disable_title" android:summary="@string/auto_disable_summary" android:defaultValue="false" />
+        <androidx.preference.SwitchPreferenceCompat android:key="AUTO_CONNECT_MOBILE" android:title="@string/auto_mobile_title" android:summary="@string/auto_mobile_summary" android:defaultValue="false" />
+        <androidx.preference.SwitchPreferenceCompat android:key="AUTO_DISCONNECT_MOBILE" android:title="@string/auto_disconnect_mobile_title" android:summary="@string/auto_disconnect_mobile_summary" android:defaultValue="false" />
+        <androidx.preference.SwitchPreferenceCompat android:key="AUTO_CONNECT_WIFI_ALLOW" android:title="@string/auto_wifi_allow_title" android:summary="@string/auto_wifi_allow_summary" android:defaultValue="false" />
+        <androidx.preference.MultiSelectListPreference android:key="AUTO_WIFI_ALLOW_SSIDS" android:title="@string/auto_wifi_allow_list_title" android:summary="@string/auto_wifi_allow_list_summary" android:dependency="AUTO_CONNECT_WIFI_ALLOW" />
+        <androidx.preference.SwitchPreferenceCompat android:key="AUTO_CONNECT_WIFI_DENY" android:title="@string/auto_wifi_deny_title" android:summary="@string/auto_wifi_deny_summary" android:defaultValue="false" />
+        <androidx.preference.MultiSelectListPreference android:key="AUTO_WIFI_DENY_SSIDS" android:title="@string/auto_wifi_deny_list_title" android:summary="@string/auto_wifi_deny_list_summary" android:dependency="AUTO_CONNECT_WIFI_DENY" />
+        <androidx.preference.SwitchPreferenceCompat android:key="AUTO_DISCONNECT_WIFI" android:title="@string/auto_disconnect_wifi_title" android:summary="@string/auto_disconnect_wifi_summary" android:defaultValue="false" />
     </PreferenceCategory>
     <PreferenceCategory>
         <kittoku.osc.preference.custom.LinkOscPreference />
