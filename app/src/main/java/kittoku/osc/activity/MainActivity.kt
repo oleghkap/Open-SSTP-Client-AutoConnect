@@ -187,11 +187,7 @@ class MainActivity : AppCompatActivity() {
 
         AlertDialog.Builder(this).also {
             it.setView(inflated)
-            it.setMessage(sum(
-                "Enter the profile's name.\n",
-                "If blank, the hostname will be used.\n",
-                "If duplicated, the profile will be overwritten."
-            ))
+            it.setMessage(getString(R.string.dialog_profile_name))
 
             it.setPositiveButton(R.string.button_save) { _, _ ->
                 prefs.edit().also { editor ->
@@ -215,9 +211,7 @@ class MainActivity : AppCompatActivity() {
         val filename = getStringPrefValue(OscPrefKey.HOME_HOSTNAME, prefs) + ".json"
 
         AlertDialog.Builder(this).also {
-            it.setMessage(
-                "Password will be also exported as plain text. If you don't want that, blank Password before exporting."
-            )
+            it.setMessage(getString(R.string.dialog_export_warning))
 
             it.setPositiveButton(R.string.button_proceed) { _, _ ->
                 exportLauncher.launch(filename)
