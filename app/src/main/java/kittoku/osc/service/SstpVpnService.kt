@@ -9,7 +9,10 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.VpnService
+import android.net.wifi.WifiInfo
 import android.os.Build
 import android.service.quicksettings.TileService
 import androidx.core.app.ActivityCompat
@@ -104,7 +107,7 @@ internal class SstpVpnService : VpnService() {
             ACTION_VPN_CONNECT -> {
                 controller?.kill(false, null)
 
-                beForegrounded()
+                beForegrounded("Соединение")
                 resetReconnectionLife(prefs)
                 if (getBooleanPrefValue(OscPrefKey.LOG_DO_SAVE_LOG, prefs)) {
                     prepareLogWriter()
@@ -192,7 +195,7 @@ internal class SstpVpnService : VpnService() {
         }
     }
 
-    private fun beForegrounded() {
+    private fun beForegrounded(status: String = "Соединение") {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             arrayOf(
                 NOTIFICATION_ERROR_CHANNEL,
@@ -206,6 +209,25 @@ internal class SstpVpnService : VpnService() {
             }
         }
 
+        startForeground(
+            NOTIFICATION_DISCONNECT_ID,
+            mainNotification(status).build()
+        )
+    }
+
+    internal fun notifyConnecting() {
+        updateMainNotification("Соединение")
+    }
+
+    internal fun notifyConnected() {
+        updateMainNotification("Соединено")
+    }
+
+    private fun updateMainNotification(status: String) {
+        tryNotify(mainNotification(status).build(), NOTIFICATION_DISCONNECT_ID)
+    }
+
+    private fun mainNotification(status: String): NotificationCompat.Builder {
         val pendingIntent = PendingIntent.getService(
             this,
             0,
@@ -213,15 +235,44 @@ internal class SstpVpnService : VpnService() {
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val builder = NotificationCompat.Builder(this, NOTIFICATION_DISCONNECT_CHANNEL).also {
+        return NotificationCompat.Builder(this, NOTIFICATION_DISCONNECT_CHANNEL).also {
             it.priority = NotificationCompat.PRIORITY_DEFAULT
             it.setOngoing(true)
-            it.setAutoCancel(true)
+            it.setAutoCancel(false)
             it.setSmallIcon(R.drawable.ic_baseline_vpn_lock_24)
+            it.setContentTitle(status)
+            it.setContentText(currentNetworkLabel())
+            it.setOnlyAlertOnce(true)
             it.addAction(R.drawable.ic_baseline_close_24, "DISCONNECT", pendingIntent)
         }
+    }
 
-        startForeground(NOTIFICATION_DISCONNECT_ID, builder.build())
+    private fun currentNetworkLabel(): String {
+        val cm = getSystemService(ConnectivityManager::class.java)
+        val candidates = cm.allNetworks.mapNotNull { network ->
+            val capabilities = cm.getNetworkCapabilities(network) ?: return@mapNotNull null
+            if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN) ||
+                !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            ) return@mapNotNull null
+            network to capabilities
+        }.sortedByDescending {
+            it.second.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        }
+
+        val capabilities = candidates.firstOrNull()?.second ?: return "Сеть не определена"
+
+        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            val info = capabilities.transportInfo as? WifiInfo
+            val ssid = info?.ssid?.trim('"')?.trim()
+            if (!ssid.isNullOrBlank() && ssid != "<unknown ssid>") return "Wi-Fi: $ssid"
+            return "Wi-Fi"
+        }
+
+        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+            return "Мобильная сеть"
+        }
+
+        return "Сеть подключена"
     }
 
     internal fun notifyMessage(message: String, id: Int, channel: String) {

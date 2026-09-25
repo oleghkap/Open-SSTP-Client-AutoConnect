@@ -98,7 +98,7 @@ internal class AutoConnectService : Service() {
             if (now == null) {
                 if (old?.type == T.MOBILE && pref(OscPrefKey.AUTO_DISCONNECT_MOBILE)) disconnect("mobile network lost")
                 if (old?.type == T.WIFI && pref(OscPrefKey.AUTO_DISCONNECT_WIFI)) disconnect("Wi-Fi network lost")
-                status("No mobile/Wi-Fi network")
+                status("Автоподключение включено")
                 return@postAtTime
             }
 
@@ -111,13 +111,13 @@ internal class AutoConnectService : Service() {
             if (!changed) return@postAtTime
 
             if (now.type == T.MOBILE) {
-                status("Mobile network")
+                status("Автоподключение включено")
                 if (pref(OscPrefKey.AUTO_CONNECT_MOBILE)) {
                     if (oldMustDisconnect) h.postDelayed({ connect("Mobile") }, 300)
                     else connect("Mobile")
                 }
             } else {
-                status("Wi-Fi" + (now.ssid?.let { " " + it } ?: ""))
+                status("Автоподключение включено")
                 if (wifiAllowed(now.ssid)) {
                     if (oldMustDisconnect) h.postDelayed({ connect("Wi-Fi") }, 300)
                     else connect("Wi-Fi")
@@ -138,7 +138,7 @@ internal class AutoConnectService : Service() {
     private fun connect(reason: String) {
         if (pref(OscPrefKey.AUTO_CONNECT_DISABLED) || pref(OscPrefKey.ROOT_STATE)) return
         if (prefs().getString(OscPrefKey.HOME_HOSTNAME.name, "").isNullOrBlank()) return
-        status("Connecting by auto-connect (" + reason + ")")
+        status("Автоподключение включено")
         runCatching {
             ContextCompat.startForegroundService(this, Intent(this, SstpVpnService::class.java).setAction(ACTION_CONNECT))
         }
@@ -146,7 +146,7 @@ internal class AutoConnectService : Service() {
 
     private fun disconnect(reason: String) {
         if (!pref(OscPrefKey.ROOT_STATE)) return
-        status("Disconnecting by auto-connect (" + reason + ")")
+        status("Автоподключение включено")
         runCatching { startService(Intent(this, SstpVpnService::class.java).setAction(ACTION_DISCONNECT)) }
     }
 

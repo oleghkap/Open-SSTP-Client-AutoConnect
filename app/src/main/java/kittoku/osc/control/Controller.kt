@@ -203,6 +203,7 @@ internal class Controller(internal val bridge: SharedBridge) {
 
 
             observer = NetworkObserver(bridge)
+        bridge.service.notifyConnected()
 
             if (isReconnectionEnabled) {
                 resetReconnectionLife(bridge.prefs)
