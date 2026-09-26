@@ -2,7 +2,6 @@ package kittoku.osc.service
 
 import android.Manifest
 import android.app.Notification
-import android.widget.RemoteViews
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -295,32 +294,19 @@ internal class SstpVpnService : VpnService() {
             it.setContentTitle(getString(R.string.app_name))
             it.setContentText(currentProfileName() + " — " + status)
 
-            val remoteViews = RemoteViews(packageName, R.layout.notification_vpn_collapsed)
-            remoteViews.setTextViewText(
-                R.id.notification_app_name,
-                getString(R.string.app_name)
-            )
-            remoteViews.setTextViewText(
-                R.id.notification_profile_status,
-                currentProfileName() + " — " + status
-            )
-
             if (downloadRateKb != null && uploadRateKb != null) {
-                remoteViews.setViewVisibility(R.id.notification_traffic, android.view.View.VISIBLE)
-                remoteViews.setTextViewText(
-                    R.id.notification_traffic,
+                it.setSubText(
                     String.format(
                         Locale.US,
-                        "D/L: %.2f kB/s  U/L: %.2f kB/s",
+                        "D/L: %.2f kB/s U/L: %.2f kB/s",
                         downloadRateKb,
                         uploadRateKb
                     )
                 )
             } else {
-                remoteViews.setViewVisibility(R.id.notification_traffic, android.view.View.GONE)
+                it.setSubText(null)
             }
 
-            it.setCustomContentView(remoteViews)
             it.setOnlyAlertOnce(true)
             it.addAction(R.drawable.ic_baseline_close_24, getString(R.string.notification_action_disconnect), pendingIntent)
         }
