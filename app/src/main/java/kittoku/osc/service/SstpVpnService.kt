@@ -2,9 +2,7 @@ package kittoku.osc.service
 
 import android.Manifest
 import android.app.Notification
-import android.text.SpannableString
-import android.text.Spanned
-import android.text.style.RelativeSizeSpan
+import android.widget.RemoteViews
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -294,27 +292,35 @@ internal class SstpVpnService : VpnService() {
             it.setAutoCancel(false)
             it.setSmallIcon(R.drawable.ic_baseline_vpn_lock_24)
 
-            val contentTitle = if (downloadRateKb != null && uploadRateKb != null) {
-                val traffic = String.format(
-                    Locale.US,
-                    "   D/L: %.2f kB/s U/L: %.2f kB/s",
-                    downloadRateKb,
-                    uploadRateKb
-                )
-                SpannableString(getString(R.string.app_name) + traffic).apply {
-                    setSpan(
-                        RelativeSizeSpan(0.68f),
-                        getString(R.string.app_name).length,
-                        length,
-                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                    )
-                }
-            } else {
+            it.setContentTitle(getString(R.string.app_name))
+            it.setContentText(currentProfileName() + " — " + status)
+
+            val remoteViews = RemoteViews(packageName, R.layout.notification_vpn_collapsed)
+            remoteViews.setTextViewText(
+                R.id.notification_app_name,
                 getString(R.string.app_name)
+            )
+            remoteViews.setTextViewText(
+                R.id.notification_profile_status,
+                currentProfileName() + " — " + status
+            )
+
+            if (downloadRateKb != null && uploadRateKb != null) {
+                remoteViews.setViewVisibility(R.id.notification_traffic, android.view.View.VISIBLE)
+                remoteViews.setTextViewText(
+                    R.id.notification_traffic,
+                    String.format(
+                        Locale.US,
+                        "D/L: %.2f kB/s  U/L: %.2f kB/s",
+                        downloadRateKb,
+                        uploadRateKb
+                    )
+                )
+            } else {
+                remoteViews.setViewVisibility(R.id.notification_traffic, android.view.View.GONE)
             }
 
-            it.setContentTitle(contentTitle)
-            it.setContentText(currentProfileName() + " — " + status)
+            it.setCustomContentView(remoteViews)
             it.setOnlyAlertOnce(true)
             it.addAction(R.drawable.ic_baseline_close_24, getString(R.string.notification_action_disconnect), pendingIntent)
         }
