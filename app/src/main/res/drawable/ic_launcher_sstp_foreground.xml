@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Clean blue network field -->
+    <path
+        android:fillColor="#2B78E4"
+        android:pathData="M54,4A50,50 0,1 0,54,104A50,50 0,1 0,54,4Z" />
+
+    <!-- Wireless signal -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M18,58C28,58 37,52 42,43" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M14,48C26,51 38,43 45,30" />
+
+    <!-- SSTP lock -->
+    <path
+        android:fillColor="#55C800"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:pathData="M57,55H99V96H57Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:pathData="M66,56V49C66,41 71,36 78,36C85,36 90,41 90,49V56" />
+
+    <!-- Keyhole -->
+    <path
+        android:fillColor="#2B78E4"
+        android:pathData="M76,66A4,4 0,1 0,84,66A4,4 0,1 0,76,66M79,69H81V80H79Z" />
+
+    <!-- SSTP -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M61,84V80.8Q63,81.7 65,81.7Q67,81.7 67,80.7Q67,80.1 66.2,79.8L63.8,79.1Q61.2,78.3 61.2,75.9Q61.2,73.2 64.7,73.2Q66.8,73.2 68.5,73.9V76.1Q66.8,75.3 65,75.3Q63.6,75.3 63.6,76Q63.6,76.6 64.6,76.9L66.8,77.5Q69.4,78.2 69.4,80.8Q69.4,84.1 65.2,84.1Q63,84.1 61,84Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M69.8,73.4H78.8V75.7H75.5V84H73.1V75.7H69.8Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M79.6,73.4H83.4Q86.9,73.4 86.9,76.4Q86.9,79.4 83.4,79.4H82V84H79.6ZM82,75.5V77.4H83.1Q84.5,77.4 84.5,76.4Q84.5,75.5 83.1,75.5Z" />
+</vector>

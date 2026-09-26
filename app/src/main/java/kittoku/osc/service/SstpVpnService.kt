@@ -2,6 +2,9 @@ package kittoku.osc.service
 
 import android.Manifest
 import android.app.Notification
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.RelativeSizeSpan
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -292,13 +295,20 @@ internal class SstpVpnService : VpnService() {
             it.setSmallIcon(R.drawable.ic_baseline_vpn_lock_24)
 
             val contentTitle = if (downloadRateKb != null && uploadRateKb != null) {
-                String.format(
+                val traffic = String.format(
                     Locale.US,
-                    "%s   D/L: %.2f kB/s U/L: %.2f kB/s",
-                    getString(R.string.app_name),
+                    "   D/L: %.2f kB/s U/L: %.2f kB/s",
                     downloadRateKb,
                     uploadRateKb
                 )
+                SpannableString(getString(R.string.app_name) + traffic).apply {
+                    setSpan(
+                        RelativeSizeSpan(0.68f),
+                        getString(R.string.app_name).length,
+                        length,
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                }
             } else {
                 getString(R.string.app_name)
             }
