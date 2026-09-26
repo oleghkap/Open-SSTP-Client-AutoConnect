@@ -95,6 +95,8 @@ internal class OutgoingManager(private val bridge: SharedBridge) {
             }
         }
 
+        bridge.addOutgoingTraffic(packet.remaining())
+
         mainBuffer.putShort(SSTP_PACKET_TYPE_DATA)
         mainBuffer.putShort((packet.remaining() + PREFIX_SIZE).toShort())
         mainBuffer.putShort(PPP_HDLC_HEADER)

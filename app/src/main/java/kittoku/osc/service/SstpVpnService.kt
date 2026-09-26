@@ -40,6 +40,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runBlocking
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -70,6 +71,7 @@ internal class SstpVpnService : VpnService() {
     private var controller: Controller?  = null
 
     private var jobReconnect: Job? = null
+    private var jobTraffic: Job? = null
 
     private fun setRootState(state: Boolean) {
         setBooleanPrefValue(state, OscPrefKey.ROOT_STATE, prefs)
@@ -216,18 +218,66 @@ internal class SstpVpnService : VpnService() {
     }
 
     internal fun notifyConnecting() {
+        stopTrafficMonitor()
         updateMainNotification(getString(R.string.notification_connecting))
     }
 
     internal fun notifyConnected() {
-        updateMainNotification(getString(R.string.notification_connected))
+        startTrafficMonitor()
     }
 
-    private fun updateMainNotification(status: String) {
-        tryNotify(mainNotification(status).build(), NOTIFICATION_DISCONNECT_ID)
+    private fun startTrafficMonitor() {
+        stopTrafficMonitor()
+
+        val bridge = controller?.bridge ?: return
+        var lastRx = bridge.incomingTrafficBytes()
+        var lastTx = bridge.outgoingTrafficBytes()
+
+        updateMainNotification(getString(R.string.notification_connected), 0.0, 0.0)
+
+        jobTraffic = scope.launch {
+            while (isActive) {
+                delay(1000L)
+
+                val rx = bridge.incomingTrafficBytes()
+                val tx = bridge.outgoingTrafficBytes()
+
+                val rxRate = (rx - lastRx).coerceAtLeast(0L) / 1000.0
+                val txRate = (tx - lastTx).coerceAtLeast(0L) / 1000.0
+
+                lastRx = rx
+                lastTx = tx
+
+                updateMainNotification(
+                    getString(R.string.notification_connected),
+                    rxRate,
+                    txRate
+                )
+            }
+        }
     }
 
-    private fun mainNotification(status: String): NotificationCompat.Builder {
+    private fun stopTrafficMonitor() {
+        jobTraffic?.cancel()
+        jobTraffic = null
+    }
+
+    private fun updateMainNotification(
+        status: String,
+        downloadRateKb: Double? = null,
+        uploadRateKb: Double? = null
+    ) {
+        tryNotify(
+            mainNotification(status, downloadRateKb, uploadRateKb).build(),
+            NOTIFICATION_DISCONNECT_ID
+        )
+    }
+
+    private fun mainNotification(
+        status: String,
+        downloadRateKb: Double? = null,
+        uploadRateKb: Double? = null
+    ): NotificationCompat.Builder {
         val pendingIntent = PendingIntent.getService(
             this,
             0,
@@ -240,7 +290,21 @@ internal class SstpVpnService : VpnService() {
             it.setOngoing(true)
             it.setAutoCancel(false)
             it.setSmallIcon(R.drawable.ic_baseline_vpn_lock_24)
-            it.setContentTitle(currentProfileName() + " — " + status)
+
+            val contentTitle = if (downloadRateKb != null && uploadRateKb != null) {
+                String.format(
+                    Locale.US,
+                    "%s   D/L: %.2f kB/s U/L: %.2f kB/s",
+                    getString(R.string.app_name),
+                    downloadRateKb,
+                    uploadRateKb
+                )
+            } else {
+                getString(R.string.app_name)
+            }
+
+            it.setContentTitle(contentTitle)
+            it.setContentText(currentProfileName() + " — " + status)
             it.setOnlyAlertOnce(true)
             it.addAction(R.drawable.ic_baseline_close_24, getString(R.string.notification_action_disconnect), pendingIntent)
         }
@@ -292,6 +356,7 @@ internal class SstpVpnService : VpnService() {
     }
 
     internal fun close() {
+        stopTrafficMonitor()
         stopForeground(true)
         stopSelf()
     }
@@ -304,6 +369,7 @@ internal class SstpVpnService : VpnService() {
         controller?.kill(false, null)
         controller = null
 
+        stopTrafficMonitor()
         scope.cancel()
 
         setRootState(false)

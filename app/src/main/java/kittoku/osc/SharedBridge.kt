@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicLong
 import java.util.UUID
 
 
@@ -90,6 +91,21 @@ internal class SharedBridge(internal val service: SstpVpnService) {
     internal lateinit var handler: CoroutineExceptionHandler
 
     internal val controlMailbox = Channel<ControlMessage>(Channel.BUFFERED)
+
+    private val incomingTrafficBytesCounter = AtomicLong()
+    private val outgoingTrafficBytesCounter = AtomicLong()
+
+    internal fun addIncomingTraffic(bytes: Int) {
+        if (bytes > 0) incomingTrafficBytesCounter.addAndGet(bytes.toLong())
+    }
+
+    internal fun addOutgoingTraffic(bytes: Int) {
+        if (bytes > 0) outgoingTrafficBytesCounter.addAndGet(bytes.toLong())
+    }
+
+    internal fun incomingTrafficBytes(): Long = incomingTrafficBytesCounter.get()
+
+    internal fun outgoingTrafficBytes(): Long = outgoingTrafficBytesCounter.get()
 
     internal var sslTerminal: SSLTerminal? = null
     internal var ipTerminal: IPTerminal? = null
