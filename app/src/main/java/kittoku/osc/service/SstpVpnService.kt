@@ -72,6 +72,7 @@ internal class SstpVpnService : VpnService() {
 
     private var jobReconnect: Job? = null
     private var jobTraffic: Job? = null
+    private var lastNotificationState: String? = null
 
     private fun setRootState(state: Boolean) {
         setBooleanPrefValue(state, OscPrefKey.ROOT_STATE, prefs)
@@ -267,6 +268,24 @@ internal class SstpVpnService : VpnService() {
         downloadRateKb: Double? = null,
         uploadRateKb: Double? = null
     ) {
+        val trafficText = if (downloadRateKb != null && uploadRateKb != null) {
+            String.format(
+                Locale.US,
+                "D/L: %.2f kB/s U/L: %.2f kB/s",
+                downloadRateKb,
+                uploadRateKb
+            )
+        } else {
+            null
+        }
+
+        val notificationState = status + "\u0000" + (trafficText ?: "")
+        if (notificationState == lastNotificationState) {
+            return
+        }
+
+        lastNotificationState = notificationState
+
         tryNotify(
             mainNotification(status, downloadRateKb, uploadRateKb).build(),
             NOTIFICATION_DISCONNECT_ID
