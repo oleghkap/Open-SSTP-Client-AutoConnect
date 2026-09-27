@@ -37,7 +37,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
 
 
-internal class Controller(internal val bridge: SharedBridge) {
+internal class Controller(internal val bridge: SharedBridge, private val generation: Long) {
     private var observer: NetworkObserver? = null
 
     private var sstpClient: SstpClient? = null
@@ -258,7 +258,7 @@ internal class Controller(internal val bridge: SharedBridge) {
         }
     }
 
-    internal fun kill(isReconnectionRequested: Boolean, cleanup: (suspend () -> Unit)?): Job? {
+    internal fun kill(isReconnectionRequested: Boolean, cleanup: (suspend () -> Unit)?, stopService: Boolean = true): Job? {
         if (!mutex.tryLock()) return jobKill
 
         jobKill = bridge.service.scope.launch {
@@ -273,8 +273,8 @@ internal class Controller(internal val bridge: SharedBridge) {
                 closeTerminals()
 
                 if (isReconnectionRequested && isReconnectionAvailable) {
-                    bridge.service.launchJobReconnect()
-                } else {
+                    bridge.service.launchJobReconnect(generation)
+                } else if (stopService) {
                     bridge.service.close()
                 }
             } finally {
