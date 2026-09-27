@@ -67,7 +67,7 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
                 val header = "OSC: ERR_UNEXPECTED"
                 bridge.service.logWriter?.report(header + "\n" + throwable.stackTraceToString())
                 bridge.service.notifyError(header)
-            })
+            }
         }
     }
 
@@ -78,104 +78,155 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
             bridge.attachSSLTerminal()
             bridge.attachIPTerminal()
 
+
             bridge.sslTerminal!!.initialize()
             if (!expectProceeded(Where.SSL, SSL_REQUEST_INTERVAL)) {
                 return@launch
             }
+
 
             IncomingManager(bridge).also {
                 it.launchJobMain()
                 incomingManager = it
             }
 
+
+            SstpClient(bridge).also {
+                sstpClient = it
+                incomingManager!!.registerMailbox(it)
+                it.launchJobRequest()
+
+                if (!expectProceeded(Where.SSTP_REQUEST, SSTP_REQUEST_TIMEOUT)) {
+                    return@launch
+                }
+
+                sstpClient!!.launchJobControl()
+            }
+
+
+            PPPClient(bridge).also {
+                pppClient = it
+                incomingManager!!.registerMailbox(it)
+                it.launchJobControl()
+            }
+
+
+            LCPClient(bridge).also {
+                incomingManager!!.registerMailbox(it)
+                it.launchJobNegotiation()
+
+                if (!expectProceeded(Where.LCP, PPP_NEGOTIATION_TIMEOUT)) {
+                    return@launch
+                }
+
+                incomingManager!!.unregisterMailbox(it)
+            }
+
+
+            val authTimeout = getIntPrefValue(OscPrefKey.PPP_AUTH_TIMEOUT, bridge.prefs) * 1000L
+            when (bridge.currentAuth) {
+                AUTH_PROTOCOl_PAP -> PAPClient(bridge).also {
+                    incomingManager!!.registerMailbox(it)
+                    it.launchJobAuth()
+
+                    if (!expectProceeded(Where.PAP, authTimeout)) {
+                        return@launch
+                    }
+
+                    incomingManager!!.unregisterMailbox(it)
+                }
+
+                AUTH_PROTOCOL_MSCHAPv2 -> ChapMSCHAPV2Client(bridge).also {
+                    chapClient = it
+                    incomingManager!!.registerMailbox(it)
+                    it.launchJobAuth()
+
+                    if (!expectProceeded(Where.CHAP, authTimeout)) {
+                        return@launch
+                    }
+                }
+
+                AUTH_PROTOCOL_EAP_MSCHAPv2 -> EAPMSAuthClient(bridge).also {
+                    eapClient = it
+                    incomingManager!!.registerMailbox(it)
+                    it.launchJobAuth()
+
+                    if (!expectProceeded(Where.EAP, authTimeout)) {
+                        return@launch
+                    }
+                }
+
+                else -> throw NotImplementedError(bridge.currentAuth)
+            }
+
+
+            sstpClient!!.sendCallConnected()
+
+
+            if (bridge.PPP_IPv4_ENABLED) {
+                IpcpClient(bridge).also {
+                    incomingManager!!.registerMailbox(it)
+                    it.launchJobNegotiation()
+
+                    if (!expectProceeded(Where.IPCP, PPP_NEGOTIATION_TIMEOUT)) {
+                        return@launch
+                    }
+
+                    incomingManager!!.unregisterMailbox(it)
+                }
+            }
+
+
+            if (bridge.PPP_IPv6_ENABLED) {
+                Ipv6cpClient(bridge).also {
+                    incomingManager!!.registerMailbox(it)
+                    it.launchJobNegotiation()
+
+                    if (!expectProceeded(Where.IPV6CP, PPP_NEGOTIATION_TIMEOUT)) {
+                        return@launch
+                    }
+
+                    incomingManager!!.unregisterMailbox(it)
+                }
+            }
+
+
+            bridge.ipTerminal!!.initialize()
+            if (!expectProceeded(Where.IP, null)) {
+                return@launch
+            }
+
+
             OutgoingManager(bridge).also {
                 it.launchJobMain()
                 outgoingManager = it
             }
 
-            SstpClient(bridge).also {
-                sstpClient = it
-                it.launchJobMain()
+
+            observer = NetworkObserver(bridge)
+        bridge.service.notifyConnected()
+
+            if (isReconnectionEnabled) {
+                resetReconnectionLife(bridge.prefs)
             }
 
-            if (!expectProceeded(Where.SSTP, SSTP_REQUEST_TIMEOUT)) {
-                return@launch
-            }
 
-            PPPClient(bridge).also {
-                pppClient = it
-                it.launchJobMain()
-            }
-
-            if (!expectProceeded(Where.PPP, PPP_NEGOTIATION_TIMEOUT)) {
-                return@launch
-            }
-
-            LCPClient(bridge).also {
-                lcpClient = it
-                it.launchJobMain()
-            }
-
-            if (!expectProceeded(Where.LCP, PPP_NEGOTIATION_TIMEOUT)) {
-                return@launch
-            }
-
-            when (getIntPrefValue(OscPrefKey.AUTH_PROTOCOL, bridge.prefs)) {
-                AUTH_PROTOCOl_PAP -> PAPClient(bridge).also {
-                    papClient = it
-                    it.launchJobMain()
-                }
-                AUTH_PROTOCOL_MSCHAPv2 -> ChapClient(bridge).also {
-                    chapClient = it
-                    it.launchJobMain()
-                }
-                AUTH_PROTOCOL_EAP_MSCHAPv2 -> ChapMSCHAPV2Client(bridge).also {
-                    chapClient = it
-                    it.launchJobMain()
-                }
-                else -> EAPClient(bridge).also {
-                    eapClient = it
-                    it.launchJobMain()
-                }
-            }
-
-            if (!expectProceeded(Where.AUTH, PPP_NEGOTIATION_TIMEOUT)) {
-                return@launch
-            }
-
-            IpcpClient(bridge).also {
-                ipcpClient = it
-                it.launchJobMain()
-            }
-
-            if (!expectProceeded(Where.IPCP, PPP_NEGOTIATION_TIMEOUT)) {
-                return@launch
-            }
-
-            if (getBooleanPrefValue(OscPrefKey.IPV6CP_ENABLED, bridge.prefs)) {
-                Ipv6cpClient(bridge).also {
-                    ipv6cpClient = it
-                    it.launchJobMain()
-                }
-                if (!expectProceeded(Where.IPV6CP, PPP_NEGOTIATION_TIMEOUT)) {
-                    return@launch
-                }
-            }
-
-            bridge.service.notifyConnected()
-            resetReconnectionLife(bridge.prefs)
-            bridge.service.setRootState(true)
-            bridge.service.logWriter?.write("VPN connection established")
+            expectProceeded(Where.SSTP_CONTROL, null) // wait ERR_ message until disconnection
         }
     }
 
-    private suspend fun expectProceeded(where: Where, timeout: Long): Boolean {
-        val received = withTimeoutOrNull(timeout) {
-            bridge.channel.receive()
-        } ?: ControlMessage(where, Result.ERR_TIMEOUT)
+    private suspend fun expectProceeded(where: Where, timeout: Long?): Boolean {
+        val received = if (timeout != null) {
+            withTimeoutOrNull(timeout) {
+                bridge.controlMailbox.receive()
+            } ?: ControlMessage(where, Result.ERR_TIMEOUT)
+        } else {
+            bridge.controlMailbox.receive()
+        }
 
         if (received.result == Result.PROCEEDED) {
             assertAlways(received.from == where)
+
             return true
         }
 
@@ -196,7 +247,7 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
 
             bridge.service.logWriter?.report(log)
             bridge.service.notifyError(header)
-        })
+        }
 
         return false
     }
@@ -204,7 +255,7 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
     internal fun disconnect() { // use if the user want to normally disconnect
         kill(false, cleanup = {
             sstpClient?.sendLastPacket(SSTP_MESSAGE_TYPE_CALL_DISCONNECT)
-        })
+        }
     }
 
     internal fun kill(isReconnectionRequested: Boolean, cleanup: (suspend () -> Unit)?, stopService: Boolean = true): Job? {
