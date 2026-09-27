@@ -1,5 +1,6 @@
 package kittoku.osc.terminal
 
+import android.net.ConnectivityManager
 import android.net.IpPrefix
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -29,6 +30,7 @@ internal class IPTerminal(private val bridge: SharedBridge) {
     private val doRoutePrivateAddresses = getBooleanPrefValue(OscPrefKey.ROUTE_DO_ROUTE_PRIVATE_ADDRESSES, bridge.prefs)
     private val doUseCustomDNSServer = getBooleanPrefValue(OscPrefKey.DNS_DO_USE_CUSTOM_SERVER, bridge.prefs)
     private val doAddCustomRoutes = getBooleanPrefValue(OscPrefKey.ROUTE_DO_ADD_CUSTOM_ROUTES, bridge.prefs)
+    private val doExcludeLocalNetwork = getBooleanPrefValue(OscPrefKey.ROUTE_DO_EXCLUDE_LOCAL_NETWORK, bridge.prefs)
 
     internal suspend fun initialize() {
         if (bridge.PPP_IPv4_ENABLED) {
@@ -70,6 +72,10 @@ internal class IPTerminal(private val bridge: SharedBridge) {
             setIPv6BasedRouting()
         }
 
+        if (doExcludeLocalNetwork) {
+            excludeLocalNetworkRoutes()
+        }
+
         if (doAddCustomRoutes) {
             addCustomRoutes()
         }
@@ -99,6 +105,22 @@ internal class IPTerminal(private val bridge: SharedBridge) {
             bridge.builder.addRoute("172.16.0.0", 12)
             bridge.builder.addRoute("192.168.0.0", 16)
         }
+    }
+
+    private fun excludeLocalNetworkRoutes() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+
+        val connectivityManager = bridge.service.getSystemService(ConnectivityManager::class.java)
+        val activeNetwork = connectivityManager.activeNetwork ?: return
+        val linkProperties = connectivityManager.getLinkProperties(activeNetwork) ?: return
+
+        linkProperties.routes
+            .asSequence()
+            .filterNot { it.isDefaultRoute }
+            .map { it.destination }
+            .filter { it.address.address.size == 4 || it.address.address.size == 16 }
+            .distinct()
+            .forEach { bridge.builder.excludeRoute(it) }
     }
 
     private fun setIPv6BasedRouting() {
