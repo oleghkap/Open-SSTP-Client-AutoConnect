@@ -53,6 +53,7 @@ internal class Controller(internal val bridge: SharedBridge) {
     private var ipv6cpClient: Ipv6cpClient? = null
 
     private var jobMain: Job? = null
+    private var jobKill: Job? = null
 
     private val mutex = Mutex()
 
@@ -257,25 +258,34 @@ internal class Controller(internal val bridge: SharedBridge) {
         }
     }
 
-    internal fun kill(isReconnectionRequested: Boolean, cleanup: (suspend () -> Unit)?) {
-        if (!mutex.tryLock()) return
+    internal fun kill(isReconnectionRequested: Boolean, cleanup: (suspend () -> Unit)?): Job? {
+        if (!mutex.tryLock()) return jobKill
 
-        bridge.service.scope.launch {
-            observer?.close()
+        jobKill = bridge.service.scope.launch {
+            try {
+                observer?.close()
 
-            jobMain?.cancel()
-            cancelClients()
+                jobMain?.cancel()
+                cancelClients()
 
-            cleanup?.invoke()
+                cleanup?.invoke()
 
-            closeTerminals()
+                closeTerminals()
 
-            if (isReconnectionRequested && isReconnectionAvailable) {
-                bridge.service.launchJobReconnect()
-            } else {
-                bridge.service.close()
+                if (isReconnectionRequested && isReconnectionAvailable) {
+                    bridge.service.launchJobReconnect()
+                } else {
+                    bridge.service.close()
+                }
+            } finally {
+                mutex.unlock()
             }
         }
+        return jobKill
+    }
+
+    internal suspend fun awaitKill() {
+        jobKill?.join()
     }
 
     private fun cancelClients() {
