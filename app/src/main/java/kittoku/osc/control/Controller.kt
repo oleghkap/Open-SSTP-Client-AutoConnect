@@ -68,7 +68,7 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
                 bridge.service.logWriter?.report(header + "\n" + throwable.stackTraceToString())
                 bridge.service.notifyError(header)
             }
-        }
+        )
     }
 
     internal fun launchJobMain() {
@@ -247,7 +247,7 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
 
             bridge.service.logWriter?.report(log)
             bridge.service.notifyError(header)
-        }
+        })
 
         return false
     }
@@ -255,7 +255,7 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
     internal fun disconnect() { // use if the user want to normally disconnect
         kill(false, cleanup = {
             sstpClient?.sendLastPacket(SSTP_MESSAGE_TYPE_CALL_DISCONNECT)
-        }
+        })
     }
 
     internal fun kill(isReconnectionRequested: Boolean, cleanup: (suspend () -> Unit)?, stopService: Boolean = true): Job? {
