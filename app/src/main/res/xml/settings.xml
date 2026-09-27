@@ -40,6 +40,7 @@
     <PreferenceCategory android:title="@string/settings_routing">
         <kittoku.osc.preference.custom.RouteDoAddDefaultRoutePreference android:key="ROUTE_DO_ADD_DEFAULT_ROUTE"/>
         <kittoku.osc.preference.custom.RouteDoRoutePrivateAddresses android:key="ROUTE_DO_ROUTE_PRIVATE_ADDRESSES"/>
+        <androidx.preference.SwitchPreferenceCompat android:key="ROUTE_DO_EXCLUDE_LOCAL_NETWORK" android:title="@string/pref_route_do_exclude_local_network" android:summary="@string/pref_route_do_exclude_local_network_summary" android:defaultValue="false"/>
         <kittoku.osc.preference.custom.RouteDoAddCustomRoutesPreference android:key="ROUTE_DO_ADD_CUSTOM_ROUTES"/>
         <kittoku.osc.preference.custom.RouteCustomRoutesPreference android:key="ROUTE_CUSTOM_ROUTES"/>
         <kittoku.osc.preference.custom.RouteDoEnableAppBasedRulePreference android:key="ROUTE_DO_ENABLE_APP_BASED_RULE"/>
