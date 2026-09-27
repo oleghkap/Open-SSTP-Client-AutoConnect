@@ -42,6 +42,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -71,6 +73,8 @@ internal class SstpVpnService : VpnService() {
     private var controller: Controller?  = null
 
     private var jobReconnect: Job? = null
+    private val connectionLifecycleMutex = Mutex()
+    private var connectionGeneration = 0L
     private var jobTraffic: Job? = null
     private var lastNotificationState: String? = null
 
@@ -108,42 +112,57 @@ internal class SstpVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return when (intent?.action) {
             ACTION_VPN_CONNECT -> {
-                runBlocking { jobReconnect?.cancelAndJoin() }
-                controller?.kill(false, null)
-                runBlocking { controller?.awaitKill() }
+                scope.launch {
+                    connectionLifecycleMutex.withLock {
+                        val generation = ++connectionGeneration
 
-                beForegrounded(getString(R.string.notification_connecting))
-                resetReconnectionLife(prefs)
-                if (getBooleanPrefValue(OscPrefKey.LOG_DO_SAVE_LOG, prefs)) {
-                    prepareLogWriter()
+                        jobReconnect?.cancelAndJoin()
+                        jobReconnect = null
+
+                        controller?.kill(false, null, false)
+                        controller?.awaitKill()
+                        controller = null
+
+                        beForegrounded(getString(R.string.notification_connecting))
+                        resetReconnectionLife(prefs)
+                        if (getBooleanPrefValue(OscPrefKey.LOG_DO_SAVE_LOG, prefs)) {
+                            prepareLogWriter()
+                        }
+
+                        logWriter?.write("Establish VPN connection")
+
+                        initializeClient(generation)
+                        setRootState(true)
+                    }
                 }
-
-                logWriter?.write("Establish VPN connection")
-
-                initializeClient()
-
-                setRootState(true)
 
                 START_STICKY
             }
 
             else -> {
-                // ensure that reconnection has been completely canceled or done
-                runBlocking { jobReconnect?.cancelAndJoin() }
+                scope.launch {
+                    connectionLifecycleMutex.withLock {
+                        ++connectionGeneration
 
-                controller?.disconnect()
-                runBlocking { controller?.awaitKill() }
-                controller = null
+                        jobReconnect?.cancelAndJoin()
+                        jobReconnect = null
 
-                close()
+                        controller?.disconnect()
+                        controller?.awaitKill()
+                        controller = null
+
+                        close()
+                    }
+                }
 
                 START_NOT_STICKY
             }
         }
     }
 
-    private fun initializeClient() {
-        controller = Controller(SharedBridge(this)).also {
+    private fun initializeClient(generation: Long = connectionGeneration) {
+        if (generation != connectionGeneration) return
+        controller = Controller(SharedBridge(this), generation).also {
             it.launchJobMain()
         }
     }
@@ -179,7 +198,9 @@ internal class SstpVpnService : VpnService() {
         logWriter = LogWriter(stream)
     }
 
-    internal fun launchJobReconnect() {
+    internal fun launchJobReconnect(generation: Long = connectionGeneration) {
+        if (generation != connectionGeneration) return
+
         jobReconnect?.cancel()
         jobReconnect = scope.launch {
             try {
@@ -194,7 +215,11 @@ internal class SstpVpnService : VpnService() {
 
                 delay(getIntPrefValue(OscPrefKey.RECONNECTION_INTERVAL, prefs) * 1000L)
 
-                initializeClient()
+                connectionLifecycleMutex.withLock {
+                    if (generation == connectionGeneration && isActive) {
+                        initializeClient(generation)
+                    }
+                }
             } catch (_: CancellationException) { }
             finally {
                 cancelNotification(NOTIFICATION_RECONNECT_ID)
@@ -391,7 +416,7 @@ internal class SstpVpnService : VpnService() {
         logWriter?.close()
         logWriter = null
 
-        controller?.kill(false, null)
+        controller?.kill(false, null, true)
         controller = null
 
         stopTrafficMonitor()
