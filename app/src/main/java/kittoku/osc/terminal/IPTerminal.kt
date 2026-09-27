@@ -1,5 +1,7 @@
 package kittoku.osc.terminal
 
+import android.net.IpPrefix
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import kittoku.osc.ControlMessage
 import kittoku.osc.Result
@@ -14,7 +16,6 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.InetAddress
 import java.nio.ByteBuffer
-
 
 internal class IPTerminal(private val bridge: SharedBridge) {
     private var fd: ParcelFileDescriptor? = null
@@ -54,7 +55,7 @@ internal class IPTerminal(private val bridge: SharedBridge) {
         }
 
         if (bridge.PPP_IPv6_ENABLED) {
-            if (bridge.currentIPv6.contentEquals(ByteArray(8))) {
+            if (bridge.currentIPv6.contentEquals(ByteArray(16))) {
                 bridge.controlMailbox.send(ControlMessage(Where.IPv6, Result.ERR_INVALID_ADDRESS))
                 return
             }
@@ -122,7 +123,9 @@ internal class IPTerminal(private val bridge: SharedBridge) {
 
     private suspend fun addCustomRoutes(): Boolean {
         getStringPrefValue(OscPrefKey.ROUTE_CUSTOM_ROUTES, bridge.prefs).split("\n").filter { it.isNotEmpty() }.forEach {
-            val parsed = it.split("/")
+            val excluded = it.startsWith("!")
+            val route = if (excluded) it.substring(1) else it
+            val parsed = route.split("/")
             if (parsed.size != 2) {
                 bridge.controlMailbox.send(ControlMessage(Where.ROUTE, Result.ERR_PARSING_FAILED))
                 return false
@@ -130,14 +133,25 @@ internal class IPTerminal(private val bridge: SharedBridge) {
 
             val address = parsed[0]
             val prefix = parsed[1].toIntOrNull()
-            if (prefix == null){
+            if (prefix == null) {
                 bridge.controlMailbox.send(ControlMessage(Where.ROUTE, Result.ERR_PARSING_FAILED))
                 return false
             }
 
             try {
-                bridge.builder.addRoute(address, prefix)
+                if (excluded) {
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                        bridge.controlMailbox.send(ControlMessage(Where.ROUTE, Result.ERR_PARSING_FAILED))
+                        return false
+                    }
+                    bridge.builder.excludeRoute(IpPrefix(InetAddress.getByName(address), prefix))
+                } else {
+                    bridge.builder.addRoute(address, prefix)
+                }
             } catch (_: IllegalArgumentException) {
+                bridge.controlMailbox.send(ControlMessage(Where.ROUTE, Result.ERR_PARSING_FAILED))
+                return false
+            } catch (_: java.net.UnknownHostException) {
                 bridge.controlMailbox.send(ControlMessage(Where.ROUTE, Result.ERR_PARSING_FAILED))
                 return false
             }
