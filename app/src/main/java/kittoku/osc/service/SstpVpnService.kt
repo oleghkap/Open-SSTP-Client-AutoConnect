@@ -108,7 +108,9 @@ internal class SstpVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return when (intent?.action) {
             ACTION_VPN_CONNECT -> {
+                runBlocking { jobReconnect?.cancelAndJoin() }
                 controller?.kill(false, null)
+                runBlocking { controller?.awaitKill() }
 
                 beForegrounded(getString(R.string.notification_connecting))
                 resetReconnectionLife(prefs)
@@ -130,6 +132,7 @@ internal class SstpVpnService : VpnService() {
                 runBlocking { jobReconnect?.cancelAndJoin() }
 
                 controller?.disconnect()
+                runBlocking { controller?.awaitKill() }
                 controller = null
 
                 close()
@@ -177,6 +180,7 @@ internal class SstpVpnService : VpnService() {
     }
 
     internal fun launchJobReconnect() {
+        jobReconnect?.cancel()
         jobReconnect = scope.launch {
             try {
                 getIntPrefValue(OscPrefKey.RECONNECTION_LIFE, prefs).also {
@@ -198,7 +202,7 @@ internal class SstpVpnService : VpnService() {
         }
     }
 
-    private fun beForegrounded(status: String = "Соединение") {
+    private fun beForegrounded(status: String = "Ð¡Ð¾ÐµÐ´Ð¸Ð½ÐµÐ½Ð¸Ðµ") {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             arrayOf(
                 NOTIFICATION_ERROR_CHANNEL,
@@ -311,7 +315,7 @@ internal class SstpVpnService : VpnService() {
             it.setSmallIcon(R.drawable.ic_baseline_vpn_lock_24)
 
             it.setContentTitle(getString(R.string.app_name))
-            it.setContentText(currentProfileName() + " — " + status)
+            it.setContentText(currentProfileName() + " â " + status)
 
             if (downloadRateKb != null && uploadRateKb != null) {
                 it.setSubText(
