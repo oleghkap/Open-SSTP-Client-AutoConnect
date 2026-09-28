@@ -144,32 +144,60 @@ internal class IPTerminal(private val bridge: SharedBridge) {
     }
 
     private suspend fun addCustomRoutes(): Boolean {
-        getStringPrefValue(OscPrefKey.ROUTE_CUSTOM_ROUTES, bridge.prefs).split("\n").filter { it.isNotEmpty() }.forEach {
-            val excluded = it.startsWith("!")
-            val route = if (excluded) it.substring(1) else it
+        val routes = getStringPrefValue(OscPrefKey.ROUTE_CUSTOM_ROUTES, bridge.prefs)
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toList()
+
+        val parsedRoutes = mutableListOf<Triple<Boolean, String, Int>>()
+
+        for (routeLine in routes) {
+            val excluded = routeLine.startsWith("!")
+            val route = if (excluded) routeLine.substring(1).trim() else routeLine
             val parsed = route.split("/")
+
             if (parsed.size != 2) {
                 bridge.controlMailbox.send(ControlMessage(Where.ROUTE, Result.ERR_PARSING_FAILED))
                 return false
             }
 
-            val address = parsed[0]
-            val prefix = parsed[1].toIntOrNull()
-            if (prefix == null) {
+            val address = parsed[0].trim()
+            val prefix = parsed[1].trim().toIntOrNull()
+
+            if (address.isEmpty() || prefix == null) {
+                bridge.controlMailbox.send(ControlMessage(Where.ROUTE, Result.ERR_PARSING_FAILED))
+                return false
+            }
+
+            parsedRoutes += Triple(excluded, address, prefix)
+        }
+
+        // Add ordinary routes first. This preserves the existing manual-route behavior.
+        for ((excluded, address, prefix) in parsedRoutes) {
+            if (excluded) continue
+
+            try {
+                bridge.builder.addRoute(address, prefix)
+            } catch (_: IllegalArgumentException) {
+                bridge.controlMailbox.send(ControlMessage(Where.ROUTE, Result.ERR_PARSING_FAILED))
+                return false
+            }
+        }
+
+        // Apply exclusions last so a leading '!' always means "bypass the VPN",
+        // even if a broader manual route appears elsewhere in the list.
+        for ((excluded, address, prefix) in parsedRoutes) {
+            if (!excluded) continue
+
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                 bridge.controlMailbox.send(ControlMessage(Where.ROUTE, Result.ERR_PARSING_FAILED))
                 return false
             }
 
             try {
-                if (excluded) {
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                        bridge.controlMailbox.send(ControlMessage(Where.ROUTE, Result.ERR_PARSING_FAILED))
-                        return false
-                    }
-                    bridge.builder.excludeRoute(IpPrefix(InetAddress.getByName(address), prefix))
-                } else {
-                    bridge.builder.addRoute(address, prefix)
-                }
+                val ipPrefix = IpPrefix(InetAddress.getByName(address), prefix)
+                bridge.builder.excludeRoute(ipPrefix)
             } catch (_: IllegalArgumentException) {
                 bridge.controlMailbox.send(ControlMessage(Where.ROUTE, Result.ERR_PARSING_FAILED))
                 return false
