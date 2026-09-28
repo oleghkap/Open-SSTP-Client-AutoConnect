@@ -37,7 +37,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
 
 
-internal class Controller(internal val bridge: SharedBridge, private val generation: Long) {
+internal class Controller(internal val bridge: SharedBridge) {
     private var observer: NetworkObserver? = null
 
     private var sstpClient: SstpClient? = null
@@ -53,7 +53,6 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
     private var ipv6cpClient: Ipv6cpClient? = null
 
     private var jobMain: Job? = null
-    private var jobKill: Job? = null
 
     private val mutex = Mutex()
 
@@ -63,12 +62,12 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
 
     private fun attachHandler() {
         bridge.handler = CoroutineExceptionHandler { _, throwable ->
-            kill(isReconnectionEnabled, cleanup = {
+            kill(isReconnectionEnabled) {
                 val header = "OSC: ERR_UNEXPECTED"
                 bridge.service.logWriter?.report(header + "\n" + throwable.stackTraceToString())
                 bridge.service.notifyError(header)
             }
-        )
+        }
     }
 
     internal fun launchJobMain() {
@@ -236,7 +235,7 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
             SSTP_MESSAGE_TYPE_CALL_ABORT
         }
 
-        kill(isReconnectionEnabled, cleanup = {
+        kill(isReconnectionEnabled) {
             sstpClient?.sendLastPacket(lastPacketType)
 
             val header = "${received.from.name}: ${received.result.name}"
@@ -247,45 +246,36 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
 
             bridge.service.logWriter?.report(log)
             bridge.service.notifyError(header)
-        })
+        }
 
         return false
     }
 
     internal fun disconnect() { // use if the user want to normally disconnect
-        kill(false, cleanup = {
+        kill(false) {
             sstpClient?.sendLastPacket(SSTP_MESSAGE_TYPE_CALL_DISCONNECT)
-        })
+        }
     }
 
-    internal fun kill(isReconnectionRequested: Boolean, cleanup: (suspend () -> Unit)?, stopService: Boolean = true): Job? {
-        if (!mutex.tryLock()) return jobKill
+    internal fun kill(isReconnectionRequested: Boolean, cleanup: (suspend () -> Unit)?) {
+        if (!mutex.tryLock()) return
 
-        jobKill = bridge.service.scope.launch {
-            try {
-                observer?.close()
+        bridge.service.scope.launch {
+            observer?.close()
 
-                jobMain?.cancel()
-                cancelClients()
+            jobMain?.cancel()
+            cancelClients()
 
-                cleanup?.invoke()
+            cleanup?.invoke()
 
-                closeTerminals()
+            closeTerminals()
 
-                if (isReconnectionRequested && isReconnectionAvailable) {
-                    bridge.service.launchJobReconnect(generation)
-                } else if (stopService) {
-                    bridge.service.close()
-                }
-            } finally {
-                mutex.unlock()
+            if (isReconnectionRequested && isReconnectionAvailable) {
+                bridge.service.launchJobReconnect()
+            } else {
+                bridge.service.close()
             }
         }
-        return jobKill
-    }
-
-    internal suspend fun awaitKill() {
-        jobKill?.join()
     }
 
     private fun cancelClients() {
