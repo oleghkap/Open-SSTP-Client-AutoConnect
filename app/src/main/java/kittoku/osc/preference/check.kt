@@ -60,7 +60,13 @@ internal fun checkPreferences(prefs: SharedPreferences): String? {
     }
 
     getIntPrefValue(OscPrefKey.PPP_MTU, prefs).also {
-        if (it !in MIN_MTU..MAX_MTU) return "The given MRU is out of $MIN_MTU-$MAX_MTU"
+        if (it !in MIN_MTU..MAX_MTU) return "The given MTU is out of $MIN_MTU-$MAX_MTU"
+    }
+
+    if (getBooleanPrefValue(OscPrefKey.PPP_DO_SET_MSS, prefs)) {
+        getIntPrefValue(OscPrefKey.PPP_MSS, prefs).also {
+            if (it !in 1..65535) return "The given MSS is out of 1-65535"
+        }
     }
 
     val isIPv4Enabled = getBooleanPrefValue(OscPrefKey.PPP_IPv4_ENABLED, prefs)

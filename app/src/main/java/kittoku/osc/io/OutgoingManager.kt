@@ -95,6 +95,10 @@ internal class OutgoingManager(private val bridge: SharedBridge) {
             }
         }
 
+        if (bridge.PPP_DO_SET_MSS) {
+            clampIpv4TcpMss(packet.array(), packet.arrayOffset() + packet.position(), packet.remaining(), bridge.PPP_MSS)
+        }
+
         bridge.addOutgoingTraffic(packet.remaining())
 
         mainBuffer.putShort(SSTP_PACKET_TYPE_DATA)

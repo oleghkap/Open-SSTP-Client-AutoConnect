@@ -301,6 +301,10 @@ internal fun IncomingManager.processIPPacket(isEnabledProtocol: Boolean, packetS
         val start = buffer.position() + 8
         val ipPacketSize = packetSize - 8
 
+        if (bridge.PPP_DO_SET_MSS) {
+            clampIpv4TcpMss(buffer.array(), start, ipPacketSize, bridge.PPP_MSS)
+        }
+
         bridge.addIncomingTraffic(ipPacketSize)
         bridge.ipTerminal!!.writePacket(start, ipPacketSize, buffer)
     }

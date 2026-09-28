@@ -126,8 +126,8 @@ internal class LCPClient(bridge: SharedBridge) : ConfigClient<LCPConfigureFrame>
     override fun createClientRequest(): LCPConfigureFrame {
         val request = LCPConfigureRequest()
 
-        if (!isMruRejected) {
-            request.options.mruOption = MRUOption().also { it.unitSize = bridge.currentMRU }
+        if (bridge.PPP_DO_SET_MRU && !isMruRejected) {
+            request.options.mruOption = MRUOption().also { it.unitSize = bridge.PPP_MRU }
         }
 
         return request

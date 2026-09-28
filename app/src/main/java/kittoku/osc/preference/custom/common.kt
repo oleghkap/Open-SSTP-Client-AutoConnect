@@ -37,6 +37,7 @@ private fun localizedPreferenceTitle(context: Context, title: String): String = 
     "Proxy Server Port Number" -> context.getString(R.string.pref_proxy_port)
     "MRU" -> context.getString(R.string.pref_mru)
     "MTU" -> context.getString(R.string.pref_mtu)
+    "MSS" -> context.getString(R.string.pref_mss)
     "Timeout Period (second)" -> context.getString(R.string.pref_timeout)
     "Retry Count" -> context.getString(R.string.pref_retry_count)
     "Retry Interval (second)" -> context.getString(R.string.pref_retry_interval)

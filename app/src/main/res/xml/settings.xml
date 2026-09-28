@@ -19,8 +19,12 @@
         <kittoku.osc.preference.custom.ProxyPasswordPreference android:key="PROXY_PASSWORD"/>
     </PreferenceCategory>
     <PreferenceCategory android:title="@string/settings_ppp_layer">
-        <kittoku.osc.preference.custom.PPPMruPreference android:key="PPP_MRU"/>
+        <androidx.preference.SwitchPreferenceCompat android:key="PPP_DO_SET_MTU" android:title="@string/ppp_set_mtu_title" android:summary="@string/ppp_set_mtu_summary" android:defaultValue="false" />
         <kittoku.osc.preference.custom.PPPMtuPreference android:key="PPP_MTU"/>
+        <androidx.preference.SwitchPreferenceCompat android:key="PPP_DO_SET_MRU" android:title="@string/ppp_set_mru_title" android:summary="@string/ppp_set_mru_summary" android:defaultValue="false" />
+        <kittoku.osc.preference.custom.PPPMruPreference android:key="PPP_MRU"/>
+        <androidx.preference.SwitchPreferenceCompat android:key="PPP_DO_SET_MSS" android:title="@string/ppp_set_mss_title" android:summary="@string/ppp_set_mss_summary" android:defaultValue="false" />
+        <kittoku.osc.preference.custom.PPPMssPreference android:key="PPP_MSS"/>
     </PreferenceCategory>
     <PreferenceCategory android:title="@string/settings_ppp_auth">
         <kittoku.osc.preference.custom.PPPAuthProtocolsPreference android:key="PPP_AUTH_PROTOCOLS"/>
@@ -40,7 +44,6 @@
     <PreferenceCategory android:title="@string/settings_routing">
         <kittoku.osc.preference.custom.RouteDoAddDefaultRoutePreference android:key="ROUTE_DO_ADD_DEFAULT_ROUTE"/>
         <kittoku.osc.preference.custom.RouteDoRoutePrivateAddresses android:key="ROUTE_DO_ROUTE_PRIVATE_ADDRESSES"/>
-        <androidx.preference.SwitchPreferenceCompat android:key="ROUTE_DO_EXCLUDE_LOCAL_NETWORK" android:title="@string/pref_route_do_exclude_local_network" android:summary="@string/pref_route_do_exclude_local_network_summary" android:defaultValue="false"/>
         <kittoku.osc.preference.custom.RouteDoAddCustomRoutesPreference android:key="ROUTE_DO_ADD_CUSTOM_ROUTES"/>
         <kittoku.osc.preference.custom.RouteCustomRoutesPreference android:key="ROUTE_CUSTOM_ROUTES"/>
         <kittoku.osc.preference.custom.RouteDoEnableAppBasedRulePreference android:key="ROUTE_DO_ENABLE_APP_BASED_RULE"/>
