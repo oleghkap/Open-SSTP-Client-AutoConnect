@@ -51,8 +51,8 @@ class HomeFragment : Fragment() {
             return
         }
 
-        profiles.sortedBy { it.key.substringAfter(PROFILE_KEY_HEADER).lowercase() }.forEach { entry ->
-            val profileName = entry.key.substringAfter(PROFILE_KEY_HEADER)
+        profiles.toList().sortedBy { it.first.substringAfter(PROFILE_KEY_HEADER).lowercase() }.forEach { entry ->
+            val profileName = entry.first.substringAfter(PROFILE_KEY_HEADER)
             val row = LinearLayout(requireContext()).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -63,15 +63,15 @@ class HomeFragment : Fragment() {
                 textSize = 18f
                 setTypeface(null, Typeface.BOLD)
                 layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
-                setOnClickListener { (activity as MainActivity).openSettingsForProfile(entry.key) }
+                setOnClickListener { (activity as MainActivity).openSettingsForProfile(entry.first) }
             }
             val toggle = SwitchCompat(requireContext()).apply {
                 isChecked = prefs.getString(ACTIVE_PROFILE_KEY, null) == entry.key
                 setOnCheckedChangeListener { _, checked ->
-                    (activity as MainActivity).activateProfile(entry.key, checked)
+                    (activity as MainActivity).activateProfile(entry.first, checked)
                 }
             }
-            row.setOnClickListener { (activity as MainActivity).openSettingsForProfile(entry.key) }
+            row.setOnClickListener { (activity as MainActivity).openSettingsForProfile(entry.first) }
             row.addView(text)
             row.addView(toggle)
             container.addView(row, LinearLayout.LayoutParams(-1, -2))
