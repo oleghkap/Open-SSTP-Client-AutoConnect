@@ -1,6 +1,6 @@
-    <string name="connection_statistics">Статистика подключения</string>
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="connection_statistics">Статистика подключения</string>
 <string name="app_name">Open SSTP Client</string><string name="tab_home">ГЛАВНАЯ</string><string name="tab_settings">НАСТРОЙКИ</string>
 <string name="menu_load_profile">Загрузить профиль</string><string name="menu_save_profile">Сохранить профиль</string><string name="menu_import_profile">Импорт профиля</string><string name="menu_export_profile">Экспорт профиля</string><string name="menu_reload_defaults">Восстановить настройки по умолчанию</string><string name="menu_select_all">Выбрать всё</string><string name="menu_unselect_all">Снять выбор</string>
 <string name="button_save">СОХРАНИТЬ</string><string name="button_cancel">ОТМЕНА</string><string name="button_proceed">ПРОДОЛЖИТЬ</string><string name="button_yes">ДА</string><string name="button_no">НЕТ</string><string name="button_load">ЗАГРУЗИТЬ</string><string name="button_delete">УДАЛИТЬ</string>
