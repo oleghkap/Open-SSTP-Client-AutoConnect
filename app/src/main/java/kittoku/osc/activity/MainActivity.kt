@@ -99,7 +99,6 @@ class MainActivity : AppCompatActivity() {
             override fun createFragment(position: Int): Fragment = if (position == 0) homeFragment else settingFragment
         }.also { binding.pager.adapter = it }
 
-        binding.tabBar.visibility = android.view.View.GONE
         binding.pager.isUserInputEnabled = false
 
         prefs.registerOnSharedPreferenceChangeListener { _, key ->
