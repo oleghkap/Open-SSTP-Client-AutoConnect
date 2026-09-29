@@ -114,13 +114,13 @@ class HomeFragment : Fragment() {
 
                 if (activeKey == entry.first && status.isNotBlank()) {
                     val statsTitle = TextView(requireContext()).apply {
-                        text = getString(R.string.connection_statistics)
+                        this.text = getString(R.string.connection_statistics)
                         textSize = 14f
                         setTypeface(null, Typeface.BOLD)
                         setPadding(16, 4, 16, 2)
                     }
                     val stats = TextView(requireContext()).apply {
-                        text = status
+                        this.text = status
                         textSize = 12f
                         setPadding(16, 0, 16, 14)
                         setTextIsSelectable(true)
