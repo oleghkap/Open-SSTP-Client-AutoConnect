@@ -31,11 +31,13 @@ import kittoku.osc.preference.PROFILE_KEY_HEADER
 import kittoku.osc.preference.ACTIVE_PROFILE_KEY
 import kittoku.osc.preference.EDITING_PROFILE_KEY
 import kittoku.osc.preference.accessor.getStringPrefValue
+import kittoku.osc.preference.accessor.getBooleanPrefValue
 import kittoku.osc.preference.deserializeProfile
 import kittoku.osc.preference.importProfile
 import kittoku.osc.preference.serializeProfile
 import kittoku.osc.service.ACTION_VPN_CONNECT
 import kittoku.osc.service.ACTION_VPN_DISCONNECT
+import kittoku.osc.service.ACTION_VPN_RESTART
 import kittoku.osc.service.SstpVpnService
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -125,16 +127,17 @@ class MainActivity : AppCompatActivity() {
     fun openProfileForProfile(profileKey: String) {
         val json = prefs.getString(profileKey, null)
         val profile = json?.let(::deserializeProfile) ?: return
-        disconnectVpn()
+        val activeKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
+
         suppressPreferenceDirty = true
         importProfile(profile, prefs)
-        val activeKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
         val editor = prefs.edit().putString(EDITING_PROFILE_KEY, profileKey)
         if (activeKey != null) editor.putString(ACTIVE_PROFILE_KEY, activeKey)
         editor.apply()
         suppressPreferenceDirty = false
         settingsDirty = false
         invalidateOptionsMenu()
+
         findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).setCurrentItem(1, false)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         title = getString(R.string.profile_title)
@@ -142,12 +145,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun createNewProfile() {
-        disconnectVpn()
+        val activeKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
         showProfileNameDialog {
             suppressPreferenceDirty = true
             importProfile(null, prefs)
             val key = PROFILE_KEY_HEADER + it
-            prefs.edit().putString(EDITING_PROFILE_KEY, key).remove(ACTIVE_PROFILE_KEY).apply()
+            val editor = prefs.edit().putString(EDITING_PROFILE_KEY, key)
+            if (activeKey != null) editor.putString(ACTIVE_PROFILE_KEY, activeKey)
+            editor.apply()
             suppressPreferenceDirty = false
             settingsDirty = true
             invalidateOptionsMenu()
@@ -168,15 +173,19 @@ class MainActivity : AppCompatActivity() {
         }
         val profile = prefs.getString(profileKey, null)?.let(::deserializeProfile) ?: return
         if (profile == null) return
-        disconnectVpn()
+        val wasConnected = getBooleanPrefValue(OscPrefKey.ROOT_STATE, prefs)
         suppressPreferenceDirty = true
         importProfile(profile, prefs)
         prefs.edit().putString(ACTIVE_PROFILE_KEY, profileKey).putString(EDITING_PROFILE_KEY, profileKey).apply()
         suppressPreferenceDirty = false
         settingsDirty = false
         invalidateOptionsMenu()
-        homeFragment.refreshProfiles()
-        connectVpn()
+        handler.post {
+            if (!isFinishing && ::homeFragment.isInitialized && homeFragment.isAdded) {
+                homeFragment.refreshProfiles()
+            }
+        }
+        if (wasConnected) restartVpn() else connectVpn()
     }
 
     fun showHome() {
@@ -243,8 +252,7 @@ class MainActivity : AppCompatActivity() {
         invalidateOptionsMenu()
         homeFragment.refreshProfiles()
         if (prefs.getString(ACTIVE_PROFILE_KEY, null) == key) {
-            disconnectVpn()
-            handler.postDelayed({ connectVpn() }, 350L)
+            restartVpn()
         }
         Toast.makeText(this, R.string.toast_profile_saved, Toast.LENGTH_SHORT).show()
     }
@@ -295,6 +303,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun connectVpn() {
         val intent = Intent(this, SstpVpnService::class.java).setAction(ACTION_VPN_CONNECT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
+    }
+
+    private fun restartVpn() {
+        val intent = Intent(this, SstpVpnService::class.java).setAction(ACTION_VPN_RESTART)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
     }
 

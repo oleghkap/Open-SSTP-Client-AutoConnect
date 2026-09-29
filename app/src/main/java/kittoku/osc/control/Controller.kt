@@ -33,6 +33,7 @@ import kittoku.osc.unit.sstp.SSTP_MESSAGE_TYPE_CALL_DISCONNECT_ACK
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -254,6 +255,18 @@ internal class Controller(internal val bridge: SharedBridge) {
     internal fun disconnect() { // use if the user want to normally disconnect
         kill(false) {
             sstpClient?.sendLastPacket(SSTP_MESSAGE_TYPE_CALL_DISCONNECT)
+        }
+    }
+
+    internal fun restart() {
+        if (!mutex.tryLock()) return
+
+        bridge.service.scope.launch {
+            observer?.close()
+            jobMain?.cancelAndJoin()
+            cancelClients()
+            closeTerminals()
+            bridge.service.restartClient()
         }
     }
 

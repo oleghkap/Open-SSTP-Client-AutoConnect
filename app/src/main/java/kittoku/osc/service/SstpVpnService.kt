@@ -49,6 +49,7 @@ import java.util.Locale
 
 internal const val ACTION_VPN_CONNECT = "kittoku.osc.connect"
 internal const val ACTION_VPN_DISCONNECT = "kittoku.osc.disconnect"
+internal const val ACTION_VPN_RESTART = "kittoku.osc.restart"
 
 internal const val NOTIFICATION_ERROR_CHANNEL = "ERROR"
 internal const val NOTIFICATION_RECONNECT_CHANNEL = "RECONNECT"
@@ -125,6 +126,12 @@ internal class SstpVpnService : VpnService() {
                 START_STICKY
             }
 
+            ACTION_VPN_RESTART -> {
+                runBlocking { jobReconnect?.cancelAndJoin() }
+                controller?.restart() ?: restartClient()
+                START_STICKY
+            }
+
             else -> {
                 // ensure that reconnection has been completely canceled or done
                 runBlocking { jobReconnect?.cancelAndJoin() }
@@ -143,6 +150,18 @@ internal class SstpVpnService : VpnService() {
         controller = Controller(SharedBridge(this)).also {
             it.launchJobMain()
         }
+    }
+
+    internal fun restartClient() {
+        jobReconnect?.cancel()
+        beForegrounded(getString(R.string.notification_connecting))
+        resetReconnectionLife(prefs)
+        if (getBooleanPrefValue(OscPrefKey.LOG_DO_SAVE_LOG, prefs)) {
+            prepareLogWriter()
+        }
+        logWriter?.write("Restart VPN connection")
+        initializeClient()
+        setRootState(true)
     }
 
     private fun prepareLogWriter() {

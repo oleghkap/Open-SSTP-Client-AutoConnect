@@ -1,3 +1,4 @@
+    <string name="connection_statistics">Статистика подключения</string>
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 <string name="app_name">Open SSTP Client</string><string name="tab_home">ГЛАВНАЯ</string><string name="tab_settings">НАСТРОЙКИ</string>
