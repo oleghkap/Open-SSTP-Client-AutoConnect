@@ -148,4 +148,6 @@ internal val DEFAULT_URI_MAP = mapOf<OscPrefKey, Uri?>(
 
 internal const val TEMP_KEY_HEADER = "_"
 internal const val PROFILE_KEY_HEADER = "PROFILE."
+internal const val ACTIVE_PROFILE_KEY = "CURRENT_ACTIVE_PROFILE"
+internal const val EDITING_PROFILE_KEY = "CURRENT_EDITING_PROFILE"
 

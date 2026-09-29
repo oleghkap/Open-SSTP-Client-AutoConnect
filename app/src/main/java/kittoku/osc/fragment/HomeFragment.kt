@@ -1,69 +1,86 @@
 package kittoku.osc.fragment
 
-import android.app.Activity
-import android.content.Intent
-import android.net.VpnService
-import android.os.Build
+import android.graphics.Typeface
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
-import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
-import androidx.preference.Preference
-import androidx.preference.PreferenceFragmentCompat
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.appcompat.widget.SwitchCompat
+import androidx.fragment.app.Fragment
 import kittoku.osc.R
-import kittoku.osc.preference.OscPrefKey
-import kittoku.osc.preference.checkPreferences
-import kittoku.osc.preference.custom.HomeConnectorPreference
-import kittoku.osc.preference.toastInvalidSetting
-import kittoku.osc.service.ACTION_VPN_CONNECT
-import kittoku.osc.service.ACTION_VPN_DISCONNECT
-import kittoku.osc.service.SstpVpnService
+import kittoku.osc.activity.MainActivity
+import kittoku.osc.preference.ACTIVE_PROFILE_KEY
+import kittoku.osc.preference.PROFILE_KEY_HEADER
+import kittoku.osc.preference.deserializeProfile
+import androidx.preference.PreferenceManager
 
+class HomeFragment : Fragment() {
+    private lateinit var container: LinearLayout
 
-class HomeFragment : PreferenceFragmentCompat() {
-    private val preparationLauncher = registerForActivityResult(StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            startVpnService(ACTION_VPN_CONNECT)
+    override fun onCreateView(inflater: android.view.LayoutInflater, parent: android.view.ViewGroup?, state: Bundle?): View {
+        container = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 28, 24, 24)
         }
-    }
-
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.home, rootKey)
+        return container
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-
-        attachConnectorListener()
+        refreshProfiles()
     }
 
-    private fun startVpnService(action: String) {
-        val intent = Intent(requireContext(), SstpVpnService::class.java).setAction(action)
+    fun refreshProfiles() {
+        if (!::container.isInitialized) return
+        container.removeAllViews()
+        val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
 
-        if (action == ACTION_VPN_CONNECT && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            requireContext().startForegroundService(intent)
-        } else {
-            requireContext().startService(intent)
-        }
-    }
-
-    private fun attachConnectorListener() {
-        findPreference<HomeConnectorPreference>(OscPrefKey.HOME_CONNECTOR.name)!!.also {
-            it.onPreferenceChangeListener = Preference.OnPreferenceChangeListener { _, newState ->
-                if (newState == true) {
-                    checkPreferences(preferenceManager.sharedPreferences!!)?.also { message ->
-                        toastInvalidSetting(message, requireContext())
-                        return@OnPreferenceChangeListener false
-                    }
-
-                    VpnService.prepare(requireContext())?.also { intent ->
-                        preparationLauncher.launch(intent)
-                    } ?: startVpnService(ACTION_VPN_CONNECT)
-                } else {
-                    startVpnService(ACTION_VPN_DISCONNECT)
-                }
-
-                true
+        val profiles = prefs.all.filter { it.key.startsWith(PROFILE_KEY_HEADER) && it.value is String }
+        if (profiles.isEmpty()) {
+            val add = TextView(requireContext()).apply {
+                text = getString(R.string.add_profile)
+                textSize = 20f
+                gravity = Gravity.CENTER
+                setTypeface(null, Typeface.BOLD)
+                setPadding(24, 80, 24, 80)
+                isClickable = true
+                setOnClickListener { (activity as MainActivity).createNewProfile() }
             }
+            container.addView(add, LinearLayout.LayoutParams(-1, -2))
+            return
         }
+
+        profiles.sortedBy { it.key.substringAfter(PROFILE_KEY_HEADER).lowercase() }.forEach { entry ->
+            val profileName = entry.key.substringAfter(PROFILE_KEY_HEADER)
+            val row = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(8, 14, 8, 14)
+            }
+            val text = TextView(requireContext()).apply {
+                this.text = profileName
+                textSize = 18f
+                setTypeface(null, Typeface.BOLD)
+                layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+                setOnClickListener { (activity as MainActivity).openSettingsForProfile(entry.key) }
+            }
+            val toggle = SwitchCompat(requireContext()).apply {
+                isChecked = prefs.getString(ACTIVE_PROFILE_KEY, null) == entry.key
+                setOnCheckedChangeListener { _, checked ->
+                    (activity as MainActivity).activateProfile(entry.key, checked)
+                }
+            }
+            row.setOnClickListener { (activity as MainActivity).openSettingsForProfile(entry.key) }
+            row.addView(text)
+            row.addView(toggle)
+            container.addView(row, LinearLayout.LayoutParams(-1, -2))
+        }
+
+        val addButton = Button(requireContext()).apply {
+            text = getString(R.string.add_profile)
+            setOnClickListener { (activity as MainActivity).createNewProfile() }
+        }
+        container.addView(addButton, LinearLayout.LayoutParams(-1, -2))
     }
 }
