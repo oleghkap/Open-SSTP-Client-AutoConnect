@@ -12,18 +12,17 @@ import android.text.InputType
 import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
+import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
-import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceManager
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import kittoku.osc.BuildConfig
 import kittoku.osc.R
 import kittoku.osc.databinding.ActivityMainBinding
-import kittoku.osc.extension.firstEditText
 import kittoku.osc.fragment.HomeFragment
 import kittoku.osc.fragment.SettingFragment
 import kittoku.osc.preference.OscPrefKey
@@ -47,8 +46,6 @@ class MainActivity : AppCompatActivity() {
     private var settingsDirty = false
     private var suppressPreferenceDirty = true
     private val handler = Handler(Looper.getMainLooper())
-    private val dialogResource: Int by lazy { EditTextPreference(this).dialogLayoutResource }
-
     private val profileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == RESULT_OK) homeFragment.refreshProfiles()
     }
@@ -239,14 +236,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showProfileNameDialog(onSaved: (String) -> Unit) {
-        val inflated = layoutInflater.inflate(dialogResource, null)
-        val editText = inflated.firstEditText()
+        val editText = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT
+        }
         val hostname = getStringPrefValue(OscPrefKey.HOME_HOSTNAME, prefs)
-        editText.inputType = InputType.TYPE_CLASS_TEXT
         editText.hint = hostname
         editText.requestFocus()
         AlertDialog.Builder(this)
-            .setView(inflated)
+            .setView(editText)
             .setMessage(R.string.dialog_profile_name)
             .setPositiveButton(R.string.button_save) { _, _ ->
                 val name = editText.text.toString().trim().ifEmpty { hostname.trim().ifEmpty { getString(R.string.default_profile_name) } }
