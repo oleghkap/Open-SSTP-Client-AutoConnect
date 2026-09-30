@@ -15,7 +15,6 @@ import androidx.preference.PreferenceManager
 import kittoku.osc.R
 import kittoku.osc.activity.MainActivity
 import kittoku.osc.preference.ACTIVE_PROFILE_KEY
-import kittoku.osc.preference.LAST_USED_PROFILE_KEY
 import kittoku.osc.preference.OscPrefKey
 import kittoku.osc.preference.PROFILE_KEY_HEADER
 
@@ -62,7 +61,6 @@ class HomeFragment : Fragment() {
             it.key.startsWith(PROFILE_KEY_HEADER) && it.value is String
         }
         val activeKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
-        val loadedKey = prefs.getString(LAST_USED_PROFILE_KEY, null)
         val status = prefs.getString(OscPrefKey.HOME_STATUS.name, "").orEmpty()
 
         if (profiles.isEmpty()) {
@@ -89,10 +87,9 @@ class HomeFragment : Fragment() {
                     setPadding(8, 14, 8, 14)
                 }
 
-                val isLoaded = loadedKey == entry.first
                 val text = TextView(requireContext()).apply {
-                    this.text = if (isLoaded) "✓ $profileName" else profileName
-                    textSize = if (isLoaded) 19f else 18f
+                    this.text = profileName
+                    textSize = 18f
                     setTypeface(null, Typeface.BOLD)
                     layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
                     setOnClickListener {
@@ -106,13 +103,6 @@ class HomeFragment : Fragment() {
                         val hostActivity = activity as? MainActivity ?: return@setOnCheckedChangeListener
                         hostActivity.activateProfile(entry.first, checked)
                     }
-                }
-
-                if (isLoaded) {
-                    val attrs = requireContext().obtainStyledAttributes(intArrayOf(android.R.attr.colorControlHighlight))
-                    val highlight = attrs.getColor(0, 0)
-                    attrs.recycle()
-                    if (highlight != 0) row.setBackgroundColor(highlight)
                 }
 
                 row.setOnClickListener {

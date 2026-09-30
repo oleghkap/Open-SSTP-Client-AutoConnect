@@ -30,7 +30,6 @@ import kittoku.osc.preference.OscPrefKey
 import kittoku.osc.preference.PROFILE_KEY_HEADER
 import kittoku.osc.preference.Profile
 import kittoku.osc.preference.ACTIVE_PROFILE_KEY
-import kittoku.osc.preference.LAST_USED_PROFILE_KEY
 import kittoku.osc.preference.EDITING_PROFILE_KEY
 import kittoku.osc.preference.accessor.getStringPrefValue
 import kittoku.osc.preference.accessor.getBooleanPrefValue
@@ -68,8 +67,7 @@ class MainActivity : AppCompatActivity() {
                     OscPrefKey.HOME_CONNECTOR.name
                 )
             ) {
-                settingsDirty = true
-                invalidateOptionsMenu()
+                updateDirtyState()
             }
         }
     private val profileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -119,7 +117,6 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        restoreLastUsedProfile()
         homeFragment = HomeFragment()
         settingFragment = SettingFragment()
 
@@ -149,10 +146,7 @@ class MainActivity : AppCompatActivity() {
         val profile = json?.let(::deserializeProfile) ?: return
         suppressPreferenceDirty = true
         importProfile(profile, prefs)
-        prefs.edit()
-            .putString(EDITING_PROFILE_KEY, profileKey)
-            .putString(LAST_USED_PROFILE_KEY, profileKey)
-            .apply()
+        prefs.edit().putString(EDITING_PROFILE_KEY, profileKey).apply()
         suppressPreferenceDirty = false
         settingsDirty = false
         invalidateOptionsMenu()
@@ -181,7 +175,6 @@ class MainActivity : AppCompatActivity() {
             findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).setCurrentItem(1, false)
             supportActionBar?.setDisplayHomeAsUpEnabled(true)
             title = getString(R.string.profile_title)
-            invalidateOptionsMenu()
         }
     }
 
@@ -199,11 +192,7 @@ class MainActivity : AppCompatActivity() {
         val previousActiveKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
         suppressPreferenceDirty = true
         importProfile(profile, prefs)
-        prefs.edit()
-            .putString(ACTIVE_PROFILE_KEY, profileKey)
-            .putString(EDITING_PROFILE_KEY, profileKey)
-            .putString(LAST_USED_PROFILE_KEY, profileKey)
-            .apply()
+        prefs.edit().putString(ACTIVE_PROFILE_KEY, profileKey).putString(EDITING_PROFILE_KEY, profileKey).apply()
         suppressPreferenceDirty = false
         updateDirtyState()
         handler.post {
@@ -223,11 +212,7 @@ class MainActivity : AppCompatActivity() {
 
     fun showHome() {
         if (::prefs.isInitialized) {
-            if (settingsDirty) {
-                discardUnsavedProfileEdits()
-            } else {
-                prefs.edit().remove(EDITING_PROFILE_KEY).apply()
-            }
+            discardUnsavedProfileEdits()
             findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager)?.setCurrentItem(0, false)
         }
         supportActionBar?.setDisplayHomeAsUpEnabled(false)
@@ -255,45 +240,6 @@ class MainActivity : AppCompatActivity() {
         if (::settingFragment.isInitialized && settingFragment.isAdded) {
             settingFragment.refreshFromCurrentProfile()
         }
-    }
-
-    private fun restoreLastUsedProfile() {
-        val key = prefs.getString(LAST_USED_PROFILE_KEY, null)
-            ?.takeIf { it.startsWith(PROFILE_KEY_HEADER) && prefs.contains(it) }
-            ?: prefs.getString(ACTIVE_PROFILE_KEY, null)
-                ?.takeIf { it.startsWith(PROFILE_KEY_HEADER) && prefs.contains(it) }
-            ?: return
-
-        val profile = prefs.getString(key, null)?.let(::deserializeProfile) ?: return
-
-        suppressPreferenceDirty = true
-        importProfile(profile, prefs)
-        prefs.edit().putString(EDITING_PROFILE_KEY, key).apply()
-        suppressPreferenceDirty = false
-        settingsDirty = false
-    }
-
-    private fun ensureEditingProfileForSettings() {
-        val editingKey = prefs.getString(EDITING_PROFILE_KEY, null)
-        // A new profile is intentionally not in SharedPreferences until Save.
-        // Never replace that in-progress draft with the last saved profile.
-        if (!editingKey.isNullOrBlank() &&
-            (prefs.contains(editingKey) || settingsDirty)
-        ) return
-
-        val key = prefs.getString(LAST_USED_PROFILE_KEY, null)
-            ?.takeIf { prefs.contains(it) }
-            ?: prefs.getString(ACTIVE_PROFILE_KEY, null)
-                ?.takeIf { prefs.contains(it) }
-            ?: return
-
-        suppressPreferenceDirty = true
-        val profile = prefs.getString(key, null)?.let(::deserializeProfile)
-        if (profile != null) {
-            importProfile(profile, prefs)
-            prefs.edit().putString(EDITING_PROFILE_KEY, key).apply()
-        }
-        suppressPreferenceDirty = false
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -325,8 +271,7 @@ class MainActivity : AppCompatActivity() {
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         val page = findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).currentItem
         if (page == 1) {
-            ensureEditingProfileForSettings()
-            settingsDirty = if (settingsDirty) true else calculateDirtyState()
+            settingsDirty = calculateDirtyState()
         }
         menu.findItem(R.id.save_profile)?.isVisible = settingsDirty && page == 1
         menu.findItem(R.id.load_profile)?.isVisible = true
@@ -359,12 +304,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveProfile(key: String) {
         val serialized = serializeProfile(prefs)
-        prefs.edit()
-            .putString(key, serialized)
-            .putString(LAST_USED_PROFILE_KEY, key)
-            .apply()
+        prefs.edit().putString(key, serialized).apply()
         settingsDirty = false
-        prefs.edit().remove(EDITING_PROFILE_KEY).apply()
         invalidateOptionsMenu()
         homeFragment.refreshProfiles()
         if (prefs.getString(ACTIVE_PROFILE_KEY, null) == key) {
