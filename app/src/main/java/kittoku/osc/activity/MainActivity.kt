@@ -53,6 +53,23 @@ class MainActivity : AppCompatActivity() {
     private var settingsDirty = false
     private var suppressPreferenceDirty = true
     private val handler = Handler(Looper.getMainLooper())
+
+    // SharedPreferences keeps only a weak reference to change listeners.
+    // Keep this listener as an Activity field so dirty-state tracking cannot disappear after GC.
+    private val preferenceChangeListener =
+        SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (!suppressPreferenceDirty &&
+                key != null &&
+                OscPrefKey.entries.any { it.name == key } &&
+                key !in setOf(
+                    OscPrefKey.ROOT_STATE.name,
+                    OscPrefKey.HOME_STATUS.name,
+                    OscPrefKey.HOME_CONNECTOR.name
+                )
+            ) {
+                updateDirtyState()
+            }
+        }
     private val profileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == RESULT_OK) {
             val profileKey = it.data?.getStringExtra(EXTRA_PROFILE_KEY)
@@ -115,13 +132,6 @@ class MainActivity : AppCompatActivity() {
         TabLayoutMediator(binding.tabBar, binding.pager) { tab, position ->
             tab.text = if (position == 0) getString(R.string.tab_home) else getString(R.string.tab_settings)
         }.attach()
-
-        prefs.registerOnSharedPreferenceChangeListener { _, key ->
-            if (!suppressPreferenceDirty && key != null && OscPrefKey.entries.any { it.name == key } &&
-                key !in setOf(OscPrefKey.ROOT_STATE.name, OscPrefKey.HOME_STATUS.name, OscPrefKey.HOME_CONNECTOR.name)) {
-                updateDirtyState()
-            }
-        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -202,12 +212,34 @@ class MainActivity : AppCompatActivity() {
 
     fun showHome() {
         if (::prefs.isInitialized) {
+            discardUnsavedProfileEdits()
             findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager)?.setCurrentItem(0, false)
         }
         supportActionBar?.setDisplayHomeAsUpEnabled(false)
         title = getString(R.string.app_name)
         if (::homeFragment.isInitialized && homeFragment.isAdded) homeFragment.refreshProfiles()
         invalidateOptionsMenu()
+    }
+
+    private fun discardUnsavedProfileEdits() {
+        val editingKey = prefs.getString(EDITING_PROFILE_KEY, null)
+        if (editingKey.isNullOrBlank()) return
+
+        val restoreKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
+        val restoreProfile = restoreKey
+            ?.takeIf { prefs.contains(it) }
+            ?.let { prefs.getString(it, null) }
+            ?.let(::deserializeProfile)
+
+        suppressPreferenceDirty = true
+        importProfile(restoreProfile, prefs)
+        prefs.edit().remove(EDITING_PROFILE_KEY).apply()
+        suppressPreferenceDirty = false
+
+        settingsDirty = false
+        if (::settingFragment.isInitialized && settingFragment.isAdded) {
+            settingFragment.refreshFromCurrentProfile()
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -218,6 +250,17 @@ class MainActivity : AppCompatActivity() {
     override fun onBackPressed() {
         val pager = findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager)
         if (pager.currentItem != 0) showHome() else super.onBackPressed()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        prefs.registerOnSharedPreferenceChangeListener(preferenceChangeListener)
+        updateDirtyState()
+    }
+
+    override fun onStop() {
+        prefs.unregisterOnSharedPreferenceChangeListener(preferenceChangeListener)
+        super.onStop()
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -377,8 +420,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun importExternalProfile(profile: Profile) {
         val activeKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
+        // An unsaved "new profile" already has an editing key. Keep using it so
+        // an external import creates/replaces that profile instead of overwriting
+        // the currently active profile.
         val editingKey = prefs.getString(EDITING_PROFILE_KEY, null)
-            ?.takeIf { it.startsWith(PROFILE_KEY_HEADER) && prefs.contains(it) }
+            ?.takeIf { it.startsWith(PROFILE_KEY_HEADER) }
         val targetKey = editingKey ?: activeKey ?: run {
             val baseName = getStringPrefValue(OscPrefKey.HOME_HOSTNAME, prefs)
                 .trim()
@@ -473,9 +519,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun restartVpn() {
-        // Restart through the normal connect path so VpnService.prepare() is always checked.
-        // This also avoids relying on stale ROOT_STATE after a failed/crashed session.
-        connectVpn()
+        val intent = Intent(this, SstpVpnService::class.java).setAction(ACTION_VPN_RESTART)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
     }
 
     private fun disconnectVpn() {
