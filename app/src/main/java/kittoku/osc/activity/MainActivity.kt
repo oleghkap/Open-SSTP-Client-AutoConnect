@@ -2,6 +2,7 @@ package kittoku.osc.activity
 
 import android.Manifest
 import android.content.Intent
+import android.net.VpnService
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
@@ -51,6 +52,12 @@ class MainActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val profileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == RESULT_OK) homeFragment.refreshProfiles()
+    }
+
+    private val vpnPreparationLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            connectVpn()
+        }
     }
 
     private val importLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -292,6 +299,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun connectVpn() {
+        val preparationIntent = VpnService.prepare(this)
+        if (preparationIntent != null) {
+            vpnPreparationLauncher.launch(preparationIntent)
+            return
+        }
+
         val intent = Intent(this, SstpVpnService::class.java).setAction(ACTION_VPN_CONNECT)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
     }
