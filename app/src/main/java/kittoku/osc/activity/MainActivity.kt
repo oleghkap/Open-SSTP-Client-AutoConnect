@@ -291,9 +291,6 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton(R.string.button_no, null).show()
     }
 
-        invalidateOptionsMenu()
-    }
-
     private fun connectVpn() {
         val intent = Intent(this, SstpVpnService::class.java).setAction(ACTION_VPN_CONNECT)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
