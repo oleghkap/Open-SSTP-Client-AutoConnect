@@ -64,7 +64,7 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
 
     private fun attachHandler() {
         bridge.handler = CoroutineExceptionHandler { _, throwable ->
-            kill(isReconnectionEnabled) {
+            kill(isReconnectionEnabled, cleanup = {
                 val header = "OSC: ERR_UNEXPECTED"
                 bridge.service.logWriter?.report(header + "\n" + throwable.stackTraceToString())
                 bridge.service.notifyError(header)
@@ -237,7 +237,7 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
             SSTP_MESSAGE_TYPE_CALL_ABORT
         }
 
-        kill(isReconnectionEnabled) {
+        kill(isReconnectionEnabled, cleanup = {
             sstpClient?.sendLastPacket(lastPacketType)
 
             val header = "${received.from.name}: ${received.result.name}"
@@ -254,7 +254,7 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
     }
 
     internal fun disconnect() { // use if the user want to normally disconnect
-        kill(false) {
+        kill(false, cleanup = {
             sstpClient?.sendLastPacket(SSTP_MESSAGE_TYPE_CALL_DISCONNECT)
         }
     }
