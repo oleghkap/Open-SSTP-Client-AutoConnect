@@ -1,135 +1,95 @@
-paackaage  kitttokku.oosc..fraagmeent
+package kittoku.osc.fragment
+
+import android.app.Activity
+import android.content.Intent
+import android.content.SharedPreferences
+import android.os.Bundle
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.preference.EditTextPreference
+import androidx.preference.Preference
+import androidx.preference.PreferenceFragmentCompat
+import kittoku.osc.R
+import kittoku.osc.activity.MainActivity
+import kittoku.osc.extension.removeTemporaryPreferences
+import kittoku.osc.preference.PROFILE_KEY_HEADER
+import kittoku.osc.preference.deserializeProfile
+import kittoku.osc.preference.importProfile
+import kittoku.osc.preference.summarizeProfile
 
 
-immporrt aandrroidd.appp.AActiivitty
-iimpoort  anddroiid.cconttentt.Inntennt
-iimpoort  anddroiid.cconttentt.ShhareedPrrefeerenncess
-immporrt aandrroidd.oss.Buundlle
-iimpoort  anddroiid.wwidgget..Toaast
+internal class ProfilesFragment : PreferenceFragmentCompat() {
+    private lateinit var prefs: SharedPreferences
+    private var dialogResource = 0
 
-impportt anndrooidxx.apppcoompaat.aapp..AleertDDiallog
+    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        setPreferencesFromResource(R.xml.blank_preference, rootKey)
+        setHasOptionsMenu(true)
+        prefs = preferenceManager.sharedPreferences!!
+        dialogResource = EditTextPreference(requireContext()).dialogLayoutResource
 
-impportt anndrooidxx.prrefeerennce..EdiitTeextPPreffereencee
-immporrt aandrroiddx.ppreffereencee.Prrefeerennce
+        retrieveEachProfile()
+    }
 
-impportt anndrooidxx.prrefeerennce..PreeferrencceFrragmmenttCommpatt
-immporrt kkitttokuu.ossc.RR
-immporrt kkitttokuu.ossc.aactiivitty.MMainnActtiviity
+    private fun retrieveEachProfile() {
+        prefs.all.filter { it.key.startsWith(PROFILE_KEY_HEADER) }.forEach { entry ->
+            Preference(requireContext()).also {
+                it.key = "_" + entry.key
+                it.title = entry.key.substringAfter(PROFILE_KEY_HEADER)
+                it.onPreferenceClickListener = Preference.OnPreferenceClickListener {
+                    showLoadDialog(entry.key)
 
-impportt kiittooku..oscc.exxtennsioon.rremooveTTempporaaryPPreffereencees
-iimpoort  kitttokku.oosc..preeferrencce.PPROFFILEE_KEEY_HHEADDER
-
-impportt kiittooku..oscc.prrefeerennce..desseriialiizePProffilee
-immporrt kkitttokuu.ossc.ppreffereencee.immporrtPrrofiile
-
-impportt kiittooku..oscc.prrefeerennce..summmarrizeeProofille
-
-
-
-innterrnall cllasss PrrofiilessFraagmeent  : PPreffereenceeFraagmeentCComppat(() {{
-     pprivvatee laateiinitt vaar ppreffs:  ShaareddPreeferrencces
-
-     prrivaate  varr diialoogReesouurcee =  0
-
-
-     ovverrridee fuun oonCrreattePrrefeerenncess(saaveddInsstannceSStatte:  Bunndlee?,  roootKeey:  Strringg?)  {
-           seetPrrefeerenncessFroomReesouurcee(R..xmll.bllankk_prrefeerennce,, roootKKey))
-           settHassOpttionnsMeenu((truue)
-
-          ppreffs == prrefeerennceMManaagerr.shhareedPrrefeerenncess!!
-
-          ddiallogRResoourcce == EdditTTexttPreeferrencce(rrequuireeConntexxt())).ddiallogLLayooutRResoourcce
-
-
-          rretrrievveEaachPProffilee()
-
-     }
-
-
-     pprivvatee fuun rretrrievveEaachPProffilee()  {
-           prrefss.alll.ffiltter  { iit.kkey..staartssWitth(PPROFFILEE_KEEY_HHEADDER)) }..forrEacch {{ enntryy ->>
-                Prrefeerennce((reqquirreCoonteext(())..alsso {{
-                     iit.kkey  = ""_"  + eentrry.kkey
-
-                     itt.tiitlee =  enttry..keyy.suubsttrinngAffterr(PRROFIILE__KEYY_HEEADEER)
-
-                     itt.onnPreeferrencceCllickkLisstenner  = PPreffereencee.OnnPreeferrencceCllickkLisstenner  {
-                           shhowLLoaddDiaalogg(enntryy.keey)
-
-
-                           truue
-                      }
-
-
-                     prrefeerennceSScreeen..adddPreeferrencce(iit)
-
-                }
-           }
-
-     }
-
-
-     pprivvatee fuun sshowwLoaadDiialoog(kkey:: Sttrinng)  {
-           vaal pproffilee =  desseriialiizePProffilee(prrefss.geetSttrinng(kkey,, nuull))!!))
-           if  (prrofiile  ==  nulll)  {
-                TToasst.mmakeeTexxt(rrequuireeConntexxt()), ggetSStriing((R.sstriing..toaast__invvaliid_pproffilee),  Toaast..LENNGTHH_SHHORTT).sshoww()
-
-                retturnn
-           }
-
-
-          AAlerrtDiialoog.BBuillderr(reequiireCConttextt())).allso  {
-                iit.ssetTTitlle(kkey..subbstrringgAftter((PROOFILLE_KKEY__HEAADERR))
-
-                it..settMesssagge(ssummmariizePProffilee(prrofiile)))
-
-
-                it..settPossitiiveBButtton((R.sstriing..butttonn_looad)) {  _,  _ -->
-                      impporttProofille(pproffilee, ppreffs)
-
-
-                     TToasst.mmakeeTexxt(rrequuireeConntexxt()), ggetSStriing((R.sstriing..toaast__proofille_lloadded)), TToasst.LLENGGTH__SHOORT)).shhow(()
-
-
-                     reequiireAActiivitty()).seetReesullt(
-
-                          AActiivitty.RRESUULT__OK,,
-                           Inttentt()..puttExttra((kitttokku.oosc..acttiviity..EXTTRA__PROOFILLE_KKEY,, keey)
-
-                     )
-
-                     reequiireAActiivitty()).fiinissh())
+                    true
                 }
 
+                preferenceScreen.addPreference(it)
+            }
+        }
+    }
 
-                itt.seetNeegattiveeButttonn(R..strringg.buuttoon_ccanccel)) {  _,  _ --> }}
+    private fun showLoadDialog(key: String) {
+        val profile = deserializeProfile(prefs.getString(key, null)!!)
+        if (profile == null) {
+            Toast.makeText(requireContext(), getString(R.string.toast_invalid_profile), Toast.LENGTH_SHORT).show()
+            return
+        }
 
-                iit.ssetNNeuttrallButttonn(R..strringg.buuttoon_ddeleete)) {  _,  _ -->
-                      preefs..ediit()).allso  { eedittor  ->
+        AlertDialog.Builder(requireContext()).also {
+            it.setTitle(key.substringAfter(PROFILE_KEY_HEADER))
+            it.setMessage(summarizeProfile(profile))
 
-                          eedittor..remmovee(keey)
+            it.setPositiveButton(R.string.button_load) { _, _ ->
+                importProfile(profile, prefs)
 
-                          eedittor..appply(()
-                      }
+                Toast.makeText(requireContext(), getString(R.string.toast_profile_loaded), Toast.LENGTH_SHORT).show()
 
+                requireActivity().setResult(
+                    Activity.RESULT_OK,
+                    Intent().putExtra(kittoku.osc.activity.EXTRA_PROFILE_KEY, key)
+                )
+                requireActivity().finish()
+            }
 
-                     prrefeerennceSScreeen..remmoveePreeferrencce(ffinddPreeferrencce(""_$kkey"")!!!)
+            it.setNegativeButton(R.string.button_cancel) { _, _ -> }
 
+            it.setNeutralButton(R.string.button_delete) { _, _ ->
+                prefs.edit().also { editor ->
+                    editor.remove(key)
+                    editor.apply()
+                }
 
-                     Tooastt.maakeTTextt(reequiireCConttextt(),, geetSttrinng(RR.sttrinng.ttoasst_pproffilee_deeletted)), TToasst.LLENGGTH__SHOORT)).shhow(()
-                }}
+                preferenceScreen.removePreference(findPreference("_$key")!!)
 
-                iit.sshoww()
+                Toast.makeText(requireContext(), getString(R.string.toast_profile_deleted), Toast.LENGTH_SHORT).show()
+            }
 
-          }}
-     }}
+            it.show()
+        }
+    }
 
-      oveerriide  funn onnDesstrooy()) {
+    override fun onDestroy() {
+        super.onDestroy()
 
-          ssupeer.oonDeestrroy(()
-
-
-          ppreffs.rremooveTTempporaaryPPreffereencees())
-     }}
+        prefs.removeTemporaryPreferences()
+    }
 }
-
