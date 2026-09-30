@@ -24,7 +24,6 @@ import kittoku.osc.BuildConfig
 import kittoku.osc.R
 import kittoku.osc.databinding.ActivityMainBinding
 import kittoku.osc.fragment.HomeFragment
-import kittoku.osc.fragment.ProfileFragment
 import kittoku.osc.fragment.SettingFragment
 import kittoku.osc.preference.OscPrefKey
 import kittoku.osc.preference.PROFILE_KEY_HEADER
@@ -39,13 +38,13 @@ import kittoku.osc.service.ACTION_VPN_CONNECT
 import kittoku.osc.service.ACTION_VPN_DISCONNECT
 import kittoku.osc.service.ACTION_VPN_RESTART
 import kittoku.osc.service.SstpVpnService
+import com.google.android.material.tabs.TabLayoutMediator
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 
 class MainActivity : AppCompatActivity() {
     private lateinit var prefs: SharedPreferences
     private lateinit var homeFragment: HomeFragment
-    private lateinit var profileFragment: ProfileFragment
     private lateinit var settingFragment: SettingFragment
     private var settingsDirty = false
     private var suppressPreferenceDirty = true
@@ -93,20 +92,20 @@ class MainActivity : AppCompatActivity() {
 
         prefs = PreferenceManager.getDefaultSharedPreferences(this)
         homeFragment = HomeFragment()
-        profileFragment = ProfileFragment()
         settingFragment = SettingFragment()
 
         object : FragmentStateAdapter(this) {
-            override fun getItemCount() = 3
+            override fun getItemCount() = 2
             override fun createFragment(position: Int): Fragment = when (position) {
                 0 -> homeFragment
-                1 -> profileFragment
-                2 -> settingFragment
+                1 -> settingFragment
                 else -> throw IllegalArgumentException(position.toString())
             }
         }.also { binding.pager.adapter = it }
 
-        binding.pager.isUserInputEnabled = false
+        TabLayoutMediator(binding.tabBar, binding.pager) { tab, position ->
+            tab.text = if (position == 0) getString(R.string.tab_home) else getString(R.string.tab_settings)
+        }.attach()
 
         prefs.registerOnSharedPreferenceChangeListener { _, key ->
             if (!suppressPreferenceDirty && key != null && OscPrefKey.entries.any { it.name == key } &&
@@ -215,12 +214,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         val page = findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).currentItem
-        menu.findItem(R.id.save_profile)?.isVisible = settingsDirty && page != 0
-        menu.findItem(R.id.load_profile)?.isVisible = page != 2
-        menu.findItem(R.id.import_profile)?.isVisible = page != 2
-        menu.findItem(R.id.export_profile)?.isVisible = page != 2
-        menu.findItem(R.id.reload_defaults)?.isVisible = page != 2
-        menu.findItem(R.id.profile_settings)?.isVisible = page == 1
+        menu.findItem(R.id.save_profile)?.isVisible = settingsDirty && page == 1
+        menu.findItem(R.id.load_profile)?.isVisible = true
+        menu.findItem(R.id.import_profile)?.isVisible = true
+        menu.findItem(R.id.export_profile)?.isVisible = true
+        menu.findItem(R.id.reload_defaults)?.isVisible = true
         return super.onPrepareOptionsMenu(menu)
     }
 
@@ -231,7 +229,6 @@ class MainActivity : AppCompatActivity() {
             R.id.import_profile -> importLauncher.launch(arrayOf("application/json"))
             R.id.export_profile -> showExportDialog()
             R.id.reload_defaults -> showReloadDialog()
-            R.id.profile_settings -> openAdvancedSettings()
             else -> return super.onOptionsItemSelected(item)
         }
         return true
@@ -294,10 +291,6 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton(R.string.button_no, null).show()
     }
 
-    private fun openAdvancedSettings() {
-        findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).setCurrentItem(2, false)
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        title = getString(R.string.settings_title)
         invalidateOptionsMenu()
     }
 

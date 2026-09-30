@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="@string/profile_title">
+        <kittoku.osc.preference.custom.HomeHostnamePreference android:key="HOME_HOSTNAME"/>
+        <kittoku.osc.preference.custom.HomeUsernamePreference android:key="HOME_USERNAME"/>
+        <kittoku.osc.preference.custom.HomePasswordPreference android:key="HOME_PASSWORD"/>
+    </PreferenceCategory>
     <PreferenceCategory android:title="@string/settings_ssl_layer">
         <kittoku.osc.preference.custom.SSLPortPreference android:key="SSL_PORT"/>
         <kittoku.osc.preference.custom.SSLVersionPreference android:key="SSL_VERSION"/>
