@@ -136,6 +136,11 @@ class MainActivity : AppCompatActivity() {
         updateDirtyState()
 
         findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).setCurrentItem(1, false)
+        handler.post {
+            if (!isFinishing && ::settingFragment.isInitialized && settingFragment.isAdded) {
+                settingFragment.refreshFromCurrentProfile()
+            }
+        }
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         title = getString(R.string.profile_title)
         invalidateOptionsMenu()
@@ -218,6 +223,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         val page = findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).currentItem
+        if (page == 1) {
+            val key = prefs.getString(EDITING_PROFILE_KEY, null)
+            settingsDirty = !key.isNullOrBlank() && prefs.contains(key) &&
+                prefs.getString(key, null) != serializeProfile(prefs)
+        }
         menu.findItem(R.id.save_profile)?.isVisible = settingsDirty && page == 1
         menu.findItem(R.id.load_profile)?.isVisible = true
         menu.findItem(R.id.import_profile)?.isVisible = true
@@ -275,6 +285,72 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    fun showProfileActions(profileKey: String): Boolean {
+        if (!prefs.contains(profileKey)) return true
+        val name = profileKey.substringAfter(PROFILE_KEY_HEADER)
+        AlertDialog.Builder(this)
+            .setTitle(name)
+            .setItems(arrayOf(getString(R.string.profile_rename), getString(R.string.button_delete))) { _, which ->
+                if (which == 0) renameProfile(profileKey) else confirmDeleteProfile(profileKey)
+            }
+            .show()
+        return true
+    }
+
+    private fun renameProfile(profileKey: String) {
+        if (!prefs.contains(profileKey)) return
+        val oldName = profileKey.substringAfter(PROFILE_KEY_HEADER)
+        val editText = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT
+            setText(oldName)
+            selectAll()
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.profile_rename)
+            .setView(editText)
+            .setPositiveButton(R.string.button_save) { _, _ ->
+                val newName = editText.text.toString().trim()
+                if (newName.isEmpty() || newName == oldName) return@setPositiveButton
+                val newKey = PROFILE_KEY_HEADER + newName
+                if (prefs.contains(newKey)) {
+                    Toast.makeText(this, R.string.toast_profile_name_exists, Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                val editor = prefs.edit().putString(newKey, prefs.getString(profileKey, null)).remove(profileKey)
+                if (prefs.getString(ACTIVE_PROFILE_KEY, null) == profileKey) editor.putString(ACTIVE_PROFILE_KEY, newKey)
+                if (prefs.getString(EDITING_PROFILE_KEY, null) == profileKey) editor.putString(EDITING_PROFILE_KEY, newKey)
+                editor.apply()
+                homeFragment.refreshProfiles()
+                updateDirtyState()
+            }
+            .setNegativeButton(R.string.button_cancel, null)
+            .show()
+    }
+
+    private fun confirmDeleteProfile(profileKey: String) {
+        val name = profileKey.substringAfter(PROFILE_KEY_HEADER)
+        AlertDialog.Builder(this)
+            .setMessage(getString(R.string.dialog_delete_profile, name))
+            .setPositiveButton(R.string.button_delete) { _, _ -> deleteProfile(profileKey) }
+            .setNegativeButton(R.string.button_cancel, null)
+            .show()
+    }
+
+    fun deleteProfile(profileKey: String) {
+        if (!prefs.contains(profileKey)) return
+        val active = prefs.getString(ACTIVE_PROFILE_KEY, null) == profileKey
+        val editor = prefs.edit().remove(profileKey)
+        if (active) editor.remove(ACTIVE_PROFILE_KEY)
+        if (prefs.getString(EDITING_PROFILE_KEY, null) == profileKey) editor.remove(EDITING_PROFILE_KEY)
+        editor.apply()
+        if (active) disconnectVpn()
+        importProfile(null, prefs)
+        settingsDirty = false
+        homeFragment.refreshProfiles()
+        if (findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).currentItem == 1) showHome()
+        Toast.makeText(this, R.string.toast_profile_deleted, Toast.LENGTH_SHORT).show()
+    }
+
     private fun importExternalProfile(profile: Profile) {
         val activeKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
         val editingKey = prefs.getString(EDITING_PROFILE_KEY, null)
@@ -303,6 +379,11 @@ class MainActivity : AppCompatActivity() {
         settingsDirty = false
         invalidateOptionsMenu()
         homeFragment.refreshProfiles()
+        handler.post {
+            if (!isFinishing && ::settingFragment.isInitialized && settingFragment.isAdded) {
+                settingFragment.refreshFromCurrentProfile()
+            }
+        }
 
         if (activeKey == targetKey) {
             connectVpn()
@@ -314,7 +395,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateDirtyState() {
         val key = prefs.getString(EDITING_PROFILE_KEY, null)
         settingsDirty = if (key.isNullOrBlank() || !prefs.contains(key)) {
-            true
+            false
         } else {
             prefs.getString(key, null) != serializeProfile(prefs)
         }
@@ -335,6 +416,11 @@ class MainActivity : AppCompatActivity() {
                 importProfile(null, prefs)
                 suppressPreferenceDirty = false
                 updateDirtyState()
+                handler.post {
+                    if (!isFinishing && ::settingFragment.isInitialized && settingFragment.isAdded) {
+                        settingFragment.refreshFromCurrentProfile()
+                    }
+                }
             }
             .setNegativeButton(R.string.button_no, null).show()
     }

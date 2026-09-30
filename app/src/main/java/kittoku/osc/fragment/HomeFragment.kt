@@ -108,6 +108,10 @@ class HomeFragment : Fragment() {
                 row.setOnClickListener {
                     (activity as MainActivity).openProfileForProfile(entry.first)
                 }
+                row.setOnLongClickListener {
+                    (activity as MainActivity).showProfileActions(entry.first)
+                    true
+                }
                 row.addView(text)
                 row.addView(toggle)
                 container.addView(row, LinearLayout.LayoutParams(-1, -2))
