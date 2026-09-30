@@ -181,6 +181,7 @@ class MainActivity : AppCompatActivity() {
             findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).setCurrentItem(1, false)
             supportActionBar?.setDisplayHomeAsUpEnabled(true)
             title = getString(R.string.profile_title)
+            invalidateOptionsMenu()
         }
     }
 
@@ -274,7 +275,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun ensureEditingProfileForSettings() {
         val editingKey = prefs.getString(EDITING_PROFILE_KEY, null)
-        if (!editingKey.isNullOrBlank() && prefs.contains(editingKey)) return
+        // A new profile is intentionally not in SharedPreferences until Save.
+        // Never replace that in-progress draft with the last saved profile.
+        if (!editingKey.isNullOrBlank() &&
+            (prefs.contains(editingKey) || settingsDirty)
+        ) return
 
         val key = prefs.getString(LAST_USED_PROFILE_KEY, null)
             ?.takeIf { prefs.contains(it) }
