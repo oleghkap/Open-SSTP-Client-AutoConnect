@@ -65,7 +65,7 @@ internal class ProfilesFragment : PreferenceFragmentCompat() {
 
                 requireActivity().setResult(
                     Activity.RESULT_OK,
-                    Intent().putExtra(kittoku.osc.activity.EXTRA_PROFILE_KEY, key)
+                    Intent().putExtra(MainActivity.EXTRA_PROFILE_KEY, key)
                 )
                 requireActivity().finish()
             }

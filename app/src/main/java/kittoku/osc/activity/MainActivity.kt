@@ -32,6 +32,7 @@ import kittoku.osc.preference.Profile
 import kittoku.osc.preference.ACTIVE_PROFILE_KEY
 import kittoku.osc.preference.EDITING_PROFILE_KEY
 import kittoku.osc.preference.accessor.getStringPrefValue
+import kittoku.osc.preference.accessor.getBooleanPrefValue
 import kittoku.osc.preference.deserializeProfile
 import kittoku.osc.preference.importProfile
 import kittoku.osc.preference.serializeProfile
@@ -49,65 +50,51 @@ class MainActivity : AppCompatActivity() {
     private lateinit var prefs: SharedPreferences
     private lateinit var homeFragment: HomeFragment
     private lateinit var settingFragment: SettingFragment
-
     private var settingsDirty = false
     private var suppressPreferenceDirty = true
     private val handler = Handler(Looper.getMainLooper())
-
-    private val profileLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            if (it.resultCode == RESULT_OK) {
-                val profileKey = it.data?.getStringExtra(EXTRA_PROFILE_KEY)
-                if (!profileKey.isNullOrBlank()) {
-                    openProfileForProfile(profileKey)
-                } else {
-                    homeFragment.refreshProfiles()
-                }
+    private val profileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (it.resultCode == RESULT_OK) {
+            val profileKey = it.data?.getStringExtra(EXTRA_PROFILE_KEY)
+            if (!profileKey.isNullOrBlank()) {
+                openProfileForProfile(profileKey)
+            } else {
+                homeFragment.refreshProfiles()
             }
         }
+    }
 
-    private val vpnPreparationLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == RESULT_OK) {
-                startVpnService(ACTION_VPN_CONNECT)
+    private val vpnPreparationLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            connectVpn()
+        }
+    }
+
+    private val importLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.also {
+            val profile = contentResolver.openInputStream(it)?.let { stream ->
+                BufferedInputStream(stream).use { input -> deserializeProfile(input.reader(Charsets.UTF_8).readText()) }
+            }
+            if (profile == null) {
+                Toast.makeText(this, R.string.toast_import_failed, Toast.LENGTH_SHORT).show()
+            } else {
+                importExternalProfile(profile)
             }
         }
+    }
 
-    private val importLauncher =
-        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            uri?.also {
-                val profile = contentResolver.openInputStream(it)?.let { stream ->
-                    BufferedInputStream(stream).use { input ->
-                        deserializeProfile(input.reader(Charsets.UTF_8).readText())
-                    }
-                }
-
-                if (profile == null) {
-                    Toast.makeText(this, R.string.toast_import_failed, Toast.LENGTH_SHORT).show()
-                } else {
-                    importExternalProfile(profile)
-                }
+    private val exportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.also {
+            contentResolver.openOutputStream(it)?.use { stream ->
+                BufferedOutputStream(stream).use { out -> out.write(serializeProfile(prefs).toByteArray(Charsets.UTF_8)) }
             }
+            Toast.makeText(this, R.string.toast_profile_exported, Toast.LENGTH_SHORT).show()
         }
-
-    private val exportLauncher =
-        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-            uri?.also {
-                contentResolver.openOutputStream(it)?.use { stream ->
-                    BufferedOutputStream(stream).use { out ->
-                        out.write(serializeProfile(prefs).toByteArray(Charsets.UTF_8))
-                    }
-                }
-
-                Toast.makeText(this, R.string.toast_profile_exported, Toast.LENGTH_SHORT).show()
-            }
-        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         title = getString(R.string.app_name)
-
         val binding = ActivityMainBinding.inflate(layoutInflater)
         binding.root.fitsSystemWindows = true
         setContentView(binding.root)
@@ -118,107 +105,64 @@ class MainActivity : AppCompatActivity() {
 
         object : FragmentStateAdapter(this) {
             override fun getItemCount() = 2
-
             override fun createFragment(position: Int): Fragment = when (position) {
                 0 -> homeFragment
                 1 -> settingFragment
                 else -> throw IllegalArgumentException(position.toString())
             }
-        }.also {
-            binding.pager.adapter = it
-        }
+        }.also { binding.pager.adapter = it }
 
         TabLayoutMediator(binding.tabBar, binding.pager) { tab, position ->
-            tab.text = if (position == 0) {
-                getString(R.string.tab_home)
-            } else {
-                getString(R.string.tab_settings)
-            }
+            tab.text = if (position == 0) getString(R.string.tab_home) else getString(R.string.tab_settings)
         }.attach()
 
         prefs.registerOnSharedPreferenceChangeListener { _, key ->
-            if (
-                !suppressPreferenceDirty &&
-                key != null &&
-                OscPrefKey.entries.any { it.name == key } &&
-                key !in setOf(
-                    OscPrefKey.ROOT_STATE.name,
-                    OscPrefKey.HOME_STATUS.name,
-                    OscPrefKey.HOME_CONNECTOR.name
-                )
-            ) {
-                settingsDirty = true
-                invalidateOptionsMenu()
+            if (!suppressPreferenceDirty && key != null && OscPrefKey.entries.any { it.name == key } &&
+                key !in setOf(OscPrefKey.ROOT_STATE.name, OscPrefKey.HOME_STATUS.name, OscPrefKey.HOME_CONNECTOR.name)) {
+                updateDirtyState()
             }
         }
 
-        if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
 
         showHome()
-        suppressPreferenceDirty = false
-        updateDirtyState()
     }
 
     fun openProfileForProfile(profileKey: String) {
         val json = prefs.getString(profileKey, null)
         val profile = json?.let(::deserializeProfile) ?: return
-
         suppressPreferenceDirty = true
         importProfile(profile, prefs)
         prefs.edit().putString(EDITING_PROFILE_KEY, profileKey).apply()
         suppressPreferenceDirty = false
-
         settingsDirty = false
         invalidateOptionsMenu()
 
-        findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager)
-            .setCurrentItem(1, false)
-
+        findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).setCurrentItem(1, false)
         handler.post {
-            if (!isFinishing && settingFragment.isAdded) {
+            if (!isFinishing && ::settingFragment.isInitialized && settingFragment.isAdded) {
                 settingFragment.refreshFromCurrentProfile()
             }
         }
-
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         title = getString(R.string.profile_title)
         invalidateOptionsMenu()
     }
 
     fun createNewProfile() {
-        showProfileNameDialog { name ->
-            val key = PROFILE_KEY_HEADER + name
-            if (prefs.contains(key)) {
-                Toast.makeText(
-                    this,
-                    R.string.toast_profile_name_exists,
-                    Toast.LENGTH_SHORT
-                ).show()
-                return@showProfileNameDialog
-            }
-
+        val activeKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
+        showProfileNameDialog {
             suppressPreferenceDirty = true
             importProfile(null, prefs)
+            val key = PROFILE_KEY_HEADER + it
             prefs.edit().putString(EDITING_PROFILE_KEY, key).apply()
             suppressPreferenceDirty = false
-
             settingsDirty = true
             invalidateOptionsMenu()
-
-            findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager)
-                .setCurrentItem(1, false)
-
-            handler.post {
-                if (!isFinishing && settingFragment.isAdded) {
-                    settingFragment.refreshFromCurrentProfile()
-                }
-            }
-
+            findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).setCurrentItem(1, false)
             supportActionBar?.setDisplayHomeAsUpEnabled(true)
             title = getString(R.string.profile_title)
         }
@@ -230,47 +174,39 @@ class MainActivity : AppCompatActivity() {
                 prefs.edit().remove(ACTIVE_PROFILE_KEY).apply()
                 disconnectVpn()
             }
-
             homeFragment.refreshProfiles()
             return
         }
-
-        val profile = prefs.getString(profileKey, null)?.let(::deserializeProfile)
-            ?: return
-
+        val profile = prefs.getString(profileKey, null)?.let(::deserializeProfile) ?: return
+        if (profile == null) return
+        val previousActiveKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
         suppressPreferenceDirty = true
         importProfile(profile, prefs)
-        prefs.edit()
-            .putString(ACTIVE_PROFILE_KEY, profileKey)
-            .putString(EDITING_PROFILE_KEY, profileKey)
-            .apply()
+        prefs.edit().putString(ACTIVE_PROFILE_KEY, profileKey).putString(EDITING_PROFILE_KEY, profileKey).apply()
         suppressPreferenceDirty = false
-
-        settingsDirty = false
-        invalidateOptionsMenu()
-
+        updateDirtyState()
         handler.post {
-            if (!isFinishing && homeFragment.isAdded) {
+            if (!isFinishing && ::homeFragment.isInitialized && homeFragment.isAdded) {
                 homeFragment.refreshProfiles()
             }
         }
-
-        connectVpn()
+        // Do not use ROOT_STATE here: it can remain true after a failed/crashed session.
+        // Every profile activation must go through VpnService.prepare() so Android can
+        // request VPN consent when necessary.
+        if (previousActiveKey != profileKey) {
+            connectVpn()
+        } else {
+            connectVpn()
+        }
     }
 
     fun showHome() {
         if (::prefs.isInitialized) {
-            findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager)
-                ?.setCurrentItem(0, false)
+            findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager)?.setCurrentItem(0, false)
         }
-
         supportActionBar?.setDisplayHomeAsUpEnabled(false)
         title = getString(R.string.app_name)
-
-        if (::homeFragment.isInitialized && homeFragment.isAdded) {
-            homeFragment.refreshProfiles()
-        }
-
+        if (::homeFragment.isInitialized && homeFragment.isAdded) homeFragment.refreshProfiles()
         invalidateOptionsMenu()
     }
 
@@ -281,11 +217,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onBackPressed() {
         val pager = findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager)
-        if (pager.currentItem != 0) {
-            showHome()
-        } else {
-            super.onBackPressed()
-        }
+        if (pager.currentItem != 0) showHome() else super.onBackPressed()
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -295,63 +227,33 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         val page = findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).currentItem
-
         if (page == 1) {
             settingsDirty = calculateDirtyState()
         }
-
-        menu?.findItem(R.id.save_profile)?.isVisible =
-            page == 1 && settingsDirty && hasEditingProfile()
-
-        menu?.findItem(R.id.load_profile)?.isVisible = true
-        menu?.findItem(R.id.import_profile)?.isVisible = true
-        menu?.findItem(R.id.export_profile)?.isVisible = true
-        menu?.findItem(R.id.reload_defaults)?.isVisible = true
-
+        menu.findItem(R.id.save_profile)?.isVisible = settingsDirty && page == 1
+        menu.findItem(R.id.load_profile)?.isVisible = true
+        menu.findItem(R.id.import_profile)?.isVisible = true
+        menu.findItem(R.id.export_profile)?.isVisible = true
+        menu.findItem(R.id.reload_defaults)?.isVisible = true
         return super.onPrepareOptionsMenu(menu)
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.save_profile -> saveCurrentProfile()
-            R.id.load_profile -> {
-                profileLauncher.launch(
-                    Intent(this, BlankActivity::class.java).putExtra(
-                        EXTRA_KEY_TYPE,
-                        BLANK_ACTIVITY_TYPE_PROFILES
-                    )
-                )
-            }
+            R.id.load_profile -> profileLauncher.launch(Intent(this, BlankActivity::class.java).putExtra(EXTRA_KEY_TYPE, BLANK_ACTIVITY_TYPE_PROFILES))
             R.id.import_profile -> importLauncher.launch(arrayOf("application/json"))
             R.id.export_profile -> showExportDialog()
             R.id.reload_defaults -> showReloadDialog()
             else -> return super.onOptionsItemSelected(item)
         }
-
         return true
-    }
-
-    private fun hasEditingProfile(): Boolean {
-        val key = prefs.getString(EDITING_PROFILE_KEY, null)
-        return !key.isNullOrBlank()
     }
 
     private fun saveCurrentProfile() {
         val key = prefs.getString(EDITING_PROFILE_KEY, null)
-
         if (key.isNullOrBlank()) {
-            showProfileNameDialog { name ->
-                val targetKey = PROFILE_KEY_HEADER + name
-                if (prefs.contains(targetKey)) {
-                    Toast.makeText(
-                        this,
-                        R.string.toast_profile_name_exists,
-                        Toast.LENGTH_SHORT
-                    ).show()
-                } else {
-                    saveProfile(targetKey)
-                }
-            }
+            showProfileNameDialog { saveProfile(PROFILE_KEY_HEADER + it) }
         } else {
             saveProfile(key)
         }
@@ -359,21 +261,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveProfile(key: String) {
         val serialized = serializeProfile(prefs)
-
-        prefs.edit()
-            .putString(key, serialized)
-            .putString(EDITING_PROFILE_KEY, key)
-            .apply()
-
+        prefs.edit().putString(key, serialized).apply()
         settingsDirty = false
         invalidateOptionsMenu()
-
         homeFragment.refreshProfiles()
-
         if (prefs.getString(ACTIVE_PROFILE_KEY, null) == key) {
             restartVpn()
         }
-
         Toast.makeText(this, R.string.toast_profile_saved, Toast.LENGTH_SHORT).show()
     }
 
@@ -381,24 +275,14 @@ class MainActivity : AppCompatActivity() {
         val editText = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_TEXT
         }
-
         val hostname = getStringPrefValue(OscPrefKey.HOME_HOSTNAME, prefs)
         editText.hint = hostname
         editText.requestFocus()
-
         AlertDialog.Builder(this)
             .setView(editText)
             .setMessage(R.string.dialog_profile_name)
             .setPositiveButton(R.string.button_save) { _, _ ->
-                val name = editText.text
-                    .toString()
-                    .trim()
-                    .ifEmpty {
-                        hostname.trim().ifEmpty {
-                            getString(R.string.default_profile_name)
-                        }
-                    }
-
+                val name = editText.text.toString().trim().ifEmpty { hostname.trim().ifEmpty { getString(R.string.default_profile_name) } }
                 onSaved(name)
             }
             .setNegativeButton(R.string.button_cancel, null)
@@ -407,73 +291,39 @@ class MainActivity : AppCompatActivity() {
 
     fun showProfileActions(profileKey: String): Boolean {
         if (!prefs.contains(profileKey)) return true
-
         val name = profileKey.substringAfter(PROFILE_KEY_HEADER)
-
         AlertDialog.Builder(this)
             .setTitle(name)
-            .setItems(
-                arrayOf(
-                    getString(R.string.profile_rename),
-                    getString(R.string.button_delete)
-                )
-            ) { _, which ->
-                if (which == 0) {
-                    renameProfile(profileKey)
-                } else {
-                    confirmDeleteProfile(profileKey)
-                }
+            .setItems(arrayOf(getString(R.string.profile_rename), getString(R.string.button_delete))) { _, which ->
+                if (which == 0) renameProfile(profileKey) else confirmDeleteProfile(profileKey)
             }
             .show()
-
         return true
     }
 
     private fun renameProfile(profileKey: String) {
         if (!prefs.contains(profileKey)) return
-
         val oldName = profileKey.substringAfter(PROFILE_KEY_HEADER)
-
         val editText = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_TEXT
             setText(oldName)
             selectAll()
         }
-
         AlertDialog.Builder(this)
             .setTitle(R.string.profile_rename)
             .setView(editText)
             .setPositiveButton(R.string.button_save) { _, _ ->
                 val newName = editText.text.toString().trim()
-
-                if (newName.isEmpty() || newName == oldName) {
-                    return@setPositiveButton
-                }
-
+                if (newName.isEmpty() || newName == oldName) return@setPositiveButton
                 val newKey = PROFILE_KEY_HEADER + newName
-
                 if (prefs.contains(newKey)) {
-                    Toast.makeText(
-                        this,
-                        R.string.toast_profile_name_exists,
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(this, R.string.toast_profile_name_exists, Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-
-                prefs.edit()
-                    .putString(newKey, prefs.getString(profileKey, null))
-                    .remove(profileKey)
-                    .apply {
-                        if (prefs.getString(ACTIVE_PROFILE_KEY, null) == profileKey) {
-                            putString(ACTIVE_PROFILE_KEY, newKey)
-                        }
-                        if (prefs.getString(EDITING_PROFILE_KEY, null) == profileKey) {
-                            putString(EDITING_PROFILE_KEY, newKey)
-                        }
-                    }
-                    .apply()
-
+                val editor = prefs.edit().putString(newKey, prefs.getString(profileKey, null)).remove(profileKey)
+                if (prefs.getString(ACTIVE_PROFILE_KEY, null) == profileKey) editor.putString(ACTIVE_PROFILE_KEY, newKey)
+                if (prefs.getString(EDITING_PROFILE_KEY, null) == profileKey) editor.putString(EDITING_PROFILE_KEY, newKey)
+                editor.apply()
                 homeFragment.refreshProfiles()
                 updateDirtyState()
             }
@@ -483,12 +333,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun confirmDeleteProfile(profileKey: String) {
         val name = profileKey.substringAfter(PROFILE_KEY_HEADER)
-
         AlertDialog.Builder(this)
             .setMessage(getString(R.string.dialog_delete_profile, name))
-            .setPositiveButton(R.string.button_delete) { _, _ ->
-                deleteProfile(profileKey)
-            }
+            .setPositiveButton(R.string.button_delete) { _, _ -> deleteProfile(profileKey) }
             .setNegativeButton(R.string.button_cancel, null)
             .show()
     }
@@ -506,9 +353,7 @@ class MainActivity : AppCompatActivity() {
             apply()
         }
 
-        if (active) {
-            disconnectVpn()
-        }
+        if (active) disconnectVpn()
 
         if (editing) {
             val newActiveKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
@@ -519,20 +364,14 @@ class MainActivity : AppCompatActivity() {
             suppressPreferenceDirty = true
             importProfile(activeProfile, prefs)
             suppressPreferenceDirty = false
-
             settingsDirty = false
             invalidateOptionsMenu()
         }
 
         homeFragment.refreshProfiles()
-
-        if (
-            editing &&
-            findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).currentItem == 1
-        ) {
+        if (editing && findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).currentItem == 1) {
             showHome()
         }
-
         Toast.makeText(this, R.string.toast_profile_deleted, Toast.LENGTH_SHORT).show()
     }
 
@@ -540,33 +379,32 @@ class MainActivity : AppCompatActivity() {
         val activeKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
         val editingKey = prefs.getString(EDITING_PROFILE_KEY, null)
             ?.takeIf { it.startsWith(PROFILE_KEY_HEADER) && prefs.contains(it) }
-
         val targetKey = editingKey ?: activeKey ?: run {
             val baseName = getStringPrefValue(OscPrefKey.HOME_HOSTNAME, prefs)
                 .trim()
                 .ifEmpty { getString(R.string.default_profile_name) }
-
             var name = baseName
             var index = 2
-
             while (prefs.contains(PROFILE_KEY_HEADER + name)) {
                 name = "$baseName ($index)"
                 index++
             }
-
             PROFILE_KEY_HEADER + name
         }
 
         suppressPreferenceDirty = true
         importProfile(profile, prefs)
-
+        val serialized = serializeProfile(prefs)
         prefs.edit()
-            .putString(targetKey, serializeProfile(prefs))
+            .putString(targetKey, serialized)
             .putString(EDITING_PROFILE_KEY, targetKey)
             .apply()
-
         suppressPreferenceDirty = false
 
+        // The imported profile is immediately persisted and then reloaded through
+        // the same path used by the profile list. This keeps the editor and the
+        // stored profile synchronized and guarantees that the imported values are
+        // visible in PreferenceScreen immediately.
         openProfileForProfile(targetKey)
 
         if (activeKey == targetKey) {
@@ -578,88 +416,69 @@ class MainActivity : AppCompatActivity() {
 
     private fun calculateDirtyState(): Boolean {
         val key = prefs.getString(EDITING_PROFILE_KEY, null) ?: return false
-
         if (key.isBlank()) return false
 
         val current = serializeProfile(prefs)
         val saved = prefs.getString(key, null)
 
+        // A newly created profile has no stored snapshot yet, so it is dirty
+        // immediately and the Save action must remain available.
         return saved == null || saved != current
     }
 
     private fun updateDirtyState() {
-        settingsDirty = calculateDirtyState()
+        val dirty = calculateDirtyState()
+        if (settingsDirty != dirty) {
+            settingsDirty = dirty
+        }
         invalidateOptionsMenu()
     }
 
     private fun showExportDialog() {
         val filename = getStringPrefValue(OscPrefKey.HOME_HOSTNAME, prefs) + ".json"
-
-        AlertDialog.Builder(this)
-            .setMessage(R.string.dialog_export_warning)
-            .setPositiveButton(R.string.button_proceed) { _, _ ->
-                exportLauncher.launch(filename)
-            }
-            .setNegativeButton(R.string.button_cancel, null)
-            .show()
+        AlertDialog.Builder(this).setMessage(R.string.dialog_export_warning)
+            .setPositiveButton(R.string.button_proceed) { _, _ -> exportLauncher.launch(filename) }
+            .setNegativeButton(R.string.button_cancel, null).show()
     }
 
     private fun showReloadDialog() {
-        AlertDialog.Builder(this)
-            .setMessage(R.string.dialog_reload_defaults)
+        AlertDialog.Builder(this).setMessage(R.string.dialog_reload_defaults)
             .setPositiveButton(R.string.button_yes) { _, _ ->
                 val key = prefs.getString(EDITING_PROFILE_KEY, null)
-
-                if (key.isNullOrBlank() || !prefs.contains(key)) {
-                    return@setPositiveButton
-                }
+                if (key.isNullOrBlank() || !prefs.contains(key)) return@setPositiveButton
 
                 suppressPreferenceDirty = true
                 importProfile(null, prefs)
                 suppressPreferenceDirty = false
-
                 settingsDirty = true
                 invalidateOptionsMenu()
-
                 handler.post {
-                    if (!isFinishing && settingFragment.isAdded) {
+                    if (!isFinishing && ::settingFragment.isInitialized && settingFragment.isAdded) {
                         settingFragment.refreshFromCurrentProfile()
                     }
                 }
             }
-            .setNegativeButton(R.string.button_no, null)
-            .show()
+            .setNegativeButton(R.string.button_no, null).show()
     }
 
     private fun connectVpn() {
         val preparationIntent = VpnService.prepare(this)
-
         if (preparationIntent != null) {
             vpnPreparationLauncher.launch(preparationIntent)
             return
         }
 
-        startVpnService(ACTION_VPN_CONNECT)
+        val intent = Intent(this, SstpVpnService::class.java).setAction(ACTION_VPN_CONNECT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
     }
 
     private fun restartVpn() {
-        startVpnService(ACTION_VPN_RESTART)
-    }
-
-    private fun startVpnService(action: String) {
-        val intent = Intent(this, SstpVpnService::class.java).setAction(action)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
+        // Restart through the normal connect path so VpnService.prepare() is always checked.
+        // This also avoids relying on stale ROOT_STATE after a failed/crashed session.
+        connectVpn()
     }
 
     private fun disconnectVpn() {
-        startService(
-            Intent(this, SstpVpnService::class.java)
-                .setAction(ACTION_VPN_DISCONNECT)
-        )
+        startService(Intent(this, SstpVpnService::class.java).setAction(ACTION_VPN_DISCONNECT))
     }
 }
