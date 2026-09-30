@@ -1,6 +1,7 @@
 package kittoku.osc.fragment
 
 import android.app.Activity
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.widget.Toast
@@ -9,6 +10,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import kittoku.osc.R
+import kittoku.osc.activity.MainActivity
 import kittoku.osc.extension.removeTemporaryPreferences
 import kittoku.osc.preference.PROFILE_KEY_HEADER
 import kittoku.osc.preference.deserializeProfile
@@ -61,7 +63,10 @@ internal class ProfilesFragment : PreferenceFragmentCompat() {
 
                 Toast.makeText(requireContext(), getString(R.string.toast_profile_loaded), Toast.LENGTH_SHORT).show()
 
-                requireActivity().setResult(Activity.RESULT_OK)
+                requireActivity().setResult(
+                    Activity.RESULT_OK,
+                    Intent().putExtra(MainActivity.EXTRA_PROFILE_KEY, key)
+                )
                 requireActivity().finish()
             }
 

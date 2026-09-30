@@ -44,6 +44,8 @@ import com.google.android.material.tabs.TabLayoutMediator
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 
+internal const val EXTRA_PROFILE_KEY = "kittoku.osc.extra.PROFILE_KEY"
+
 class MainActivity : AppCompatActivity() {
     private lateinit var prefs: SharedPreferences
     private lateinit var homeFragment: HomeFragment
@@ -52,7 +54,14 @@ class MainActivity : AppCompatActivity() {
     private var suppressPreferenceDirty = true
     private val handler = Handler(Looper.getMainLooper())
     private val profileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (it.resultCode == RESULT_OK) homeFragment.refreshProfiles()
+        if (it.resultCode == RESULT_OK) {
+            val profileKey = it.data?.getStringExtra(EXTRA_PROFILE_KEY)
+            if (!profileKey.isNullOrBlank()) {
+                openProfileForProfile(profileKey)
+            } else {
+                homeFragment.refreshProfiles()
+            }
+        }
     }
 
     private val vpnPreparationLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -125,15 +134,12 @@ class MainActivity : AppCompatActivity() {
     fun openProfileForProfile(profileKey: String) {
         val json = prefs.getString(profileKey, null)
         val profile = json?.let(::deserializeProfile) ?: return
-        val activeKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
-
         suppressPreferenceDirty = true
         importProfile(profile, prefs)
-        val editor = prefs.edit().putString(EDITING_PROFILE_KEY, profileKey)
-        if (activeKey != null) editor.putString(ACTIVE_PROFILE_KEY, activeKey)
-        editor.apply()
+        prefs.edit().putString(EDITING_PROFILE_KEY, profileKey).apply()
         suppressPreferenceDirty = false
-        updateDirtyState()
+        settingsDirty = false
+        invalidateOptionsMenu()
 
         findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).setCurrentItem(1, false)
         handler.post {
@@ -152,9 +158,7 @@ class MainActivity : AppCompatActivity() {
             suppressPreferenceDirty = true
             importProfile(null, prefs)
             val key = PROFILE_KEY_HEADER + it
-            val editor = prefs.edit().putString(EDITING_PROFILE_KEY, key)
-            if (activeKey != null) editor.putString(ACTIVE_PROFILE_KEY, activeKey)
-            editor.apply()
+            prefs.edit().putString(EDITING_PROFILE_KEY, key).apply()
             suppressPreferenceDirty = false
             settingsDirty = true
             invalidateOptionsMenu()
@@ -224,9 +228,7 @@ class MainActivity : AppCompatActivity() {
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         val page = findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).currentItem
         if (page == 1) {
-            val key = prefs.getString(EDITING_PROFILE_KEY, null)
-            settingsDirty = !key.isNullOrBlank() && prefs.contains(key) &&
-                prefs.getString(key, null) != serializeProfile(prefs)
+            settingsDirty = calculateDirtyState()
         }
         menu.findItem(R.id.save_profile)?.isVisible = settingsDirty && page == 1
         menu.findItem(R.id.load_profile)?.isVisible = true
@@ -258,8 +260,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveProfile(key: String) {
-        prefs.edit().putString(key, serializeProfile(prefs)).apply()
-        updateDirtyState()
+        val serialized = serializeProfile(prefs)
+        prefs.edit().putString(key, serialized).apply()
+        settingsDirty = false
+        invalidateOptionsMenu()
         homeFragment.refreshProfiles()
         if (prefs.getString(ACTIVE_PROFILE_KEY, null) == key) {
             restartVpn()
@@ -338,16 +342,36 @@ class MainActivity : AppCompatActivity() {
 
     fun deleteProfile(profileKey: String) {
         if (!prefs.contains(profileKey)) return
+
         val active = prefs.getString(ACTIVE_PROFILE_KEY, null) == profileKey
-        val editor = prefs.edit().remove(profileKey)
-        if (active) editor.remove(ACTIVE_PROFILE_KEY)
-        if (prefs.getString(EDITING_PROFILE_KEY, null) == profileKey) editor.remove(EDITING_PROFILE_KEY)
-        editor.apply()
+        val editing = prefs.getString(EDITING_PROFILE_KEY, null) == profileKey
+
+        prefs.edit().apply {
+            remove(profileKey)
+            if (active) remove(ACTIVE_PROFILE_KEY)
+            if (editing) remove(EDITING_PROFILE_KEY)
+            apply()
+        }
+
         if (active) disconnectVpn()
-        importProfile(null, prefs)
-        settingsDirty = false
+
+        if (editing) {
+            val newActiveKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
+            val activeProfile = newActiveKey
+                ?.let { prefs.getString(it, null) }
+                ?.let(::deserializeProfile)
+
+            suppressPreferenceDirty = true
+            importProfile(activeProfile, prefs)
+            suppressPreferenceDirty = false
+            settingsDirty = false
+            invalidateOptionsMenu()
+        }
+
         homeFragment.refreshProfiles()
-        if (findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).currentItem == 1) showHome()
+        if (editing && findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).currentItem == 1) {
+            showHome()
+        }
         Toast.makeText(this, R.string.toast_profile_deleted, Toast.LENGTH_SHORT).show()
     }
 
@@ -376,28 +400,36 @@ class MainActivity : AppCompatActivity() {
             .putString(EDITING_PROFILE_KEY, targetKey)
             .apply()
         suppressPreferenceDirty = false
-        settingsDirty = false
-        invalidateOptionsMenu()
-        homeFragment.refreshProfiles()
-        handler.post {
-            if (!isFinishing && ::settingFragment.isInitialized && settingFragment.isAdded) {
-                settingFragment.refreshFromCurrentProfile()
-            }
-        }
+
+        // The imported profile is immediately persisted and then reloaded through
+        // the same path used by the profile list. This keeps the editor and the
+        // stored profile synchronized and guarantees that the imported values are
+        // visible in PreferenceScreen immediately.
+        openProfileForProfile(targetKey)
 
         if (activeKey == targetKey) {
-            connectVpn()
+            restartVpn()
         }
 
         Toast.makeText(this, R.string.toast_profile_imported, Toast.LENGTH_SHORT).show()
     }
 
+    private fun calculateDirtyState(): Boolean {
+        val key = prefs.getString(EDITING_PROFILE_KEY, null) ?: return false
+        if (key.isBlank()) return false
+
+        val current = serializeProfile(prefs)
+        val saved = prefs.getString(key, null)
+
+        // A newly created profile has no stored snapshot yet, so it is dirty
+        // immediately and the Save action must remain available.
+        return saved == null || saved != current
+    }
+
     private fun updateDirtyState() {
-        val key = prefs.getString(EDITING_PROFILE_KEY, null)
-        settingsDirty = if (key.isNullOrBlank() || !prefs.contains(key)) {
-            false
-        } else {
-            prefs.getString(key, null) != serializeProfile(prefs)
+        val dirty = calculateDirtyState()
+        if (settingsDirty != dirty) {
+            settingsDirty = dirty
         }
         invalidateOptionsMenu()
     }
@@ -412,10 +444,14 @@ class MainActivity : AppCompatActivity() {
     private fun showReloadDialog() {
         AlertDialog.Builder(this).setMessage(R.string.dialog_reload_defaults)
             .setPositiveButton(R.string.button_yes) { _, _ ->
+                val key = prefs.getString(EDITING_PROFILE_KEY, null)
+                if (key.isNullOrBlank() || !prefs.contains(key)) return@setPositiveButton
+
                 suppressPreferenceDirty = true
                 importProfile(null, prefs)
                 suppressPreferenceDirty = false
-                updateDirtyState()
+                settingsDirty = true
+                invalidateOptionsMenu()
                 handler.post {
                     if (!isFinishing && ::settingFragment.isInitialized && settingFragment.isAdded) {
                         settingFragment.refreshFromCurrentProfile()
