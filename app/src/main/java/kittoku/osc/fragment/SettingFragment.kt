@@ -67,6 +67,7 @@ internal class SettingFragment : PreferenceFragmentCompat() {
         prefs = preferenceManager.sharedPreferences!!
 
         bindPreferences()
+        installDirtyTracking(preferenceScreen)
     }
 
     fun refreshFromCurrentProfile() {
@@ -85,6 +86,27 @@ internal class SettingFragment : PreferenceFragmentCompat() {
         setLogDirListener()
         setSelectAppsListener()
         setupAutoConnect()
+    }
+
+    private fun installDirtyTracking(group: PreferenceGroup) {
+        for (index in 0 until group.preferenceCount) {
+            val preference = group.getPreference(index)
+            if (preference is PreferenceGroup) {
+                installDirtyTracking(preference)
+            } else {
+                val previous = preference.onPreferenceChangeListener
+                preference.onPreferenceChangeListener = Preference.OnPreferenceChangeListener { changed, newValue ->
+                    val accepted = previous?.onPreferenceChange(changed, newValue) ?: true
+                    if (accepted && !isAdded) {
+                        return@OnPreferenceChangeListener accepted
+                    }
+                    if (accepted && !isAdded.not()) {
+                        (activity as? MainActivity)?.markSettingsDirty()
+                    }
+                    accepted
+                }
+            }
+        }
     }
 
     private fun setCertDirListener() {

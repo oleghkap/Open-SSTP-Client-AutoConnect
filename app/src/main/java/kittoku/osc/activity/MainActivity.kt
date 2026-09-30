@@ -117,8 +117,11 @@ class MainActivity : AppCompatActivity() {
         }.attach()
 
         prefs.registerOnSharedPreferenceChangeListener { _, key ->
-            if (!suppressPreferenceDirty && key != null && OscPrefKey.entries.any { it.name == key } &&
+            if (!suppressPreferenceDirty && key != null &&
+                OscPrefKey.entries.any { it.name == key } &&
                 key !in setOf(OscPrefKey.ROOT_STATE.name, OscPrefKey.HOME_STATUS.name, OscPrefKey.HOME_CONNECTOR.name)) {
+                settingsDirty = true
+                invalidateOptionsMenu()
                 updateDirtyState()
             }
         }
@@ -230,7 +233,8 @@ class MainActivity : AppCompatActivity() {
         if (page == 1) {
             settingsDirty = calculateDirtyState()
         }
-        menu.findItem(R.id.save_profile)?.isVisible = settingsDirty && page == 1
+        val hasEditingProfile = !prefs.getString(EDITING_PROFILE_KEY, null).isNullOrBlank()
+        menu.findItem(R.id.save_profile)?.isVisible = page == 1 && hasEditingProfile && settingsDirty
         menu.findItem(R.id.load_profile)?.isVisible = true
         menu.findItem(R.id.import_profile)?.isVisible = true
         menu.findItem(R.id.export_profile)?.isVisible = true
@@ -261,7 +265,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveProfile(key: String) {
         val serialized = serializeProfile(prefs)
-        prefs.edit().putString(key, serialized).apply()
+        prefs.edit()
+            .putString(key, serialized)
+            .putString(EDITING_PROFILE_KEY, key)
+            .apply()
         settingsDirty = false
         invalidateOptionsMenu()
         homeFragment.refreshProfiles()
