@@ -42,6 +42,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -72,6 +74,8 @@ internal class SstpVpnService : VpnService() {
     private var controller: Controller?  = null
 
     private var jobReconnect: Job? = null
+    private val connectionLifecycleMutex = Mutex()
+    private var connectionGeneration = 0L
     private var jobTraffic: Job? = null
     private var lastNotificationState: String? = null
 
@@ -109,50 +113,79 @@ internal class SstpVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return when (intent?.action) {
             ACTION_VPN_CONNECT -> {
-                controller?.kill(false, null)
+                scope.launch {
+                    connectionLifecycleMutex.withLock {
+                        val generation = ++connectionGeneration
 
-                beForegrounded(getString(R.string.notification_connecting))
-                resetReconnectionLife(prefs)
-                if (getBooleanPrefValue(OscPrefKey.LOG_DO_SAVE_LOG, prefs)) {
-                    prepareLogWriter()
+                        jobReconnect?.cancelAndJoin()
+                        jobReconnect = null
+
+                        controller?.kill(false, null, false)
+                        controller?.awaitKill()
+                        controller = null
+
+                        beForegrounded(getString(R.string.notification_connecting))
+                        resetReconnectionLife(prefs)
+                        if (getBooleanPrefValue(OscPrefKey.LOG_DO_SAVE_LOG, prefs)) {
+                            prepareLogWriter()
+                        }
+
+                        logWriter?.write("Establish VPN connection")
+
+                        initializeClient(generation)
+                        setRootState(true)
+                    }
                 }
-
-                logWriter?.write("Establish VPN connection")
-
-                initializeClient()
-
-                setRootState(true)
 
                 START_STICKY
             }
 
             ACTION_VPN_RESTART -> {
-                runBlocking { jobReconnect?.cancelAndJoin() }
-                controller?.restart() ?: restartClient()
+                scope.launch {
+                    connectionLifecycleMutex.withLock {
+                        val generation = ++connectionGeneration
+
+                        jobReconnect?.cancelAndJoin()
+                        jobReconnect = null
+
+                        controller?.restart()
+                        if (controller == null) {
+                            restartClient(generation)
+                        }
+                    }
+                }
                 START_STICKY
             }
 
             else -> {
-                // ensure that reconnection has been completely canceled or done
-                runBlocking { jobReconnect?.cancelAndJoin() }
+                scope.launch {
+                    connectionLifecycleMutex.withLock {
+                        ++connectionGeneration
 
-                controller?.disconnect()
-                controller = null
+                        jobReconnect?.cancelAndJoin()
+                        jobReconnect = null
 
-                close()
+                        controller?.disconnect()
+                        controller?.awaitKill()
+                        controller = null
+
+                        close()
+                    }
+                }
 
                 START_NOT_STICKY
             }
         }
     }
 
-    private fun initializeClient() {
-        controller = Controller(SharedBridge(this)).also {
+    private fun initializeClient(generation: Long = connectionGeneration) {
+        if (generation != connectionGeneration) return
+        controller = Controller(SharedBridge(this), generation).also {
             it.launchJobMain()
         }
     }
 
-    internal fun restartClient() {
+    internal fun restartClient(generation: Long = connectionGeneration) {
         jobReconnect?.cancel()
         beForegrounded(getString(R.string.notification_connecting))
         resetReconnectionLife(prefs)
@@ -160,7 +193,7 @@ internal class SstpVpnService : VpnService() {
             prepareLogWriter()
         }
         logWriter?.write("Restart VPN connection")
-        initializeClient()
+        initializeClient(generation)
         setRootState(true)
     }
 
@@ -195,7 +228,10 @@ internal class SstpVpnService : VpnService() {
         logWriter = LogWriter(stream)
     }
 
-    internal fun launchJobReconnect() {
+    internal fun launchJobReconnect(generation: Long = connectionGeneration) {
+        if (generation != connectionGeneration) return
+
+        jobReconnect?.cancel()
         jobReconnect = scope.launch {
             try {
                 getIntPrefValue(OscPrefKey.RECONNECTION_LIFE, prefs).also {
@@ -207,9 +243,14 @@ internal class SstpVpnService : VpnService() {
                     logWriter?.report(message)
                 }
 
-                delay(getIntPrefValue(OscPrefKey.RECONNECTION_INTERVAL, prefs) * 1000L)
+                val interval = getIntPrefValue(OscPrefKey.RECONNECTION_INTERVAL, prefs)
+                if (interval > 0) {
+                    delay(interval * 1000L)
+                }
 
-                initializeClient()
+                if (isActive && generation == connectionGeneration) {
+                    initializeClient(generation)
+                }
             } catch (_: CancellationException) { }
             finally {
                 cancelNotification(NOTIFICATION_RECONNECT_ID)
@@ -406,7 +447,10 @@ internal class SstpVpnService : VpnService() {
         logWriter?.close()
         logWriter = null
 
-        controller?.kill(false, null)
+        runBlocking {
+            controller?.kill(false, null)
+            controller?.awaitKill()
+        }
         controller = null
 
         stopTrafficMonitor()

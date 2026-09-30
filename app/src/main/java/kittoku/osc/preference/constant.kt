@@ -103,7 +103,7 @@ internal val DEFAULT_INT_MAP = mapOf(
     OscPrefKey.PPP_MSS to 1460,
     OscPrefKey.PPP_AUTH_TIMEOUT to 10,
     OscPrefKey.RECONNECTION_COUNT to 10,
-    OscPrefKey.RECONNECTION_INTERVAL to 10,
+    OscPrefKey.RECONNECTION_INTERVAL to 0,
     OscPrefKey.RECONNECTION_LIFE to 0,
 )
 
