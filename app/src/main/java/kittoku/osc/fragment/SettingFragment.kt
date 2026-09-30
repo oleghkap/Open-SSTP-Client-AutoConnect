@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts.StartActivityFo
 import androidx.core.content.ContextCompat
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.Preference
+import androidx.preference.PreferenceGroup
 import androidx.preference.SwitchPreferenceCompat
 import androidx.preference.PreferenceFragmentCompat
 import kittoku.osc.R
@@ -75,6 +76,7 @@ internal class SettingFragment : PreferenceFragmentCompat() {
         setPreferencesFromResource(R.xml.settings, null)
         prefs = preferenceManager.sharedPreferences!!
         bindPreferences()
+        installDirtyTracking(preferenceScreen)
     }
 
     private fun bindPreferences() {
