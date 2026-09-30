@@ -14,7 +14,6 @@ import androidx.activity.result.contract.ActivityResultContracts.StartActivityFo
 import androidx.core.content.ContextCompat
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.Preference
-import androidx.preference.PreferenceGroup
 import androidx.preference.SwitchPreferenceCompat
 import androidx.preference.PreferenceFragmentCompat
 import kittoku.osc.R
@@ -68,7 +67,6 @@ internal class SettingFragment : PreferenceFragmentCompat() {
         prefs = preferenceManager.sharedPreferences!!
 
         bindPreferences()
-        installDirtyTracking(preferenceScreen)
     }
 
     fun refreshFromCurrentProfile() {
@@ -88,24 +86,6 @@ internal class SettingFragment : PreferenceFragmentCompat() {
         setLogDirListener()
         setSelectAppsListener()
         setupAutoConnect()
-    }
-
-    private fun installDirtyTracking(group: PreferenceGroup) {
-        for (index in 0 until group.preferenceCount) {
-            val preference = group.getPreference(index)
-            if (preference is PreferenceGroup) {
-                installDirtyTracking(preference)
-            } else {
-                val previous = preference.onPreferenceChangeListener
-                preference.onPreferenceChangeListener = Preference.OnPreferenceChangeListener { changed, newValue ->
-                    val accepted = previous?.onPreferenceChange(changed, newValue) ?: true
-                    if (accepted) {
-                        (activity as? MainActivity)?.markSettingsDirty()
-                    }
-                    accepted
-                }
-            }
-        }
     }
 
     private fun setCertDirListener() {

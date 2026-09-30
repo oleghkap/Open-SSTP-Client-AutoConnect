@@ -230,9 +230,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         val page = findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).currentItem
-        if (page == 1) {
-            settingsDirty = calculateDirtyState()
-        }
         val hasEditingProfile = !prefs.getString(EDITING_PROFILE_KEY, null).isNullOrBlank()
         menu.findItem(R.id.save_profile)?.isVisible = page == 1 && hasEditingProfile && settingsDirty
         menu.findItem(R.id.load_profile)?.isVisible = true
