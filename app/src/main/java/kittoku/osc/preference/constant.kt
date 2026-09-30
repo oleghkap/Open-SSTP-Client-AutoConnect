@@ -85,7 +85,7 @@ internal val DEFAULT_BOOLEAN_MAP = mapOf(
     OscPrefKey.ROUTE_DO_ADD_CUSTOM_ROUTES to false,
     OscPrefKey.ROUTE_DO_ENABLE_APP_BASED_RULE to false,
     OscPrefKey.ROUTE_DO_SHOW_BACKGROUND_APPS to false,
-    OscPrefKey.RECONNECTION_ENABLED to false,
+    OscPrefKey.RECONNECTION_ENABLED to true,
     OscPrefKey.LOG_DO_SAVE_LOG to false,
     OscPrefKey.AUTO_CONNECT_DISABLED to false,
     OscPrefKey.AUTO_CONNECT_MOBILE to false,
@@ -101,8 +101,8 @@ internal val DEFAULT_INT_MAP = mapOf(
     OscPrefKey.PPP_MRU to DEFAULT_MRU,
     OscPrefKey.PPP_MTU to DEFAULT_MTU,
     OscPrefKey.PPP_MSS to 1460,
-    OscPrefKey.PPP_AUTH_TIMEOUT to 3,
-    OscPrefKey.RECONNECTION_COUNT to 3,
+    OscPrefKey.PPP_AUTH_TIMEOUT to 10,
+    OscPrefKey.RECONNECTION_COUNT to 10,
     OscPrefKey.RECONNECTION_INTERVAL to 10,
     OscPrefKey.RECONNECTION_LIFE to 0,
 )
@@ -135,7 +135,7 @@ internal const val AUTH_PROTOCOL_EAP_MSCHAPv2 = "EAP-MSCHAPv2"
 
 internal val DEFAULT_SET_MAP = mapOf(
     OscPrefKey.SSL_SUITES to EMPTY_SET,
-    OscPrefKey.PPP_AUTH_PROTOCOLS to setOf(AUTH_PROTOCOl_PAP, AUTH_PROTOCOL_MSCHAPv2),
+    OscPrefKey.PPP_AUTH_PROTOCOLS to setOf(AUTH_PROTOCOL_MSCHAPv2),
     OscPrefKey.ROUTE_SELECTED_APPS to EMPTY_SET,
     OscPrefKey.AUTO_WIFI_ALLOW_SSIDS to EMPTY_SET,
     OscPrefKey.AUTO_WIFI_DENY_SSIDS to EMPTY_SET,

@@ -28,6 +28,7 @@ import kittoku.osc.fragment.HomeFragment
 import kittoku.osc.fragment.SettingFragment
 import kittoku.osc.preference.OscPrefKey
 import kittoku.osc.preference.PROFILE_KEY_HEADER
+import kittoku.osc.preference.Profile
 import kittoku.osc.preference.ACTIVE_PROFILE_KEY
 import kittoku.osc.preference.EDITING_PROFILE_KEY
 import kittoku.osc.preference.accessor.getStringPrefValue
@@ -68,15 +69,7 @@ class MainActivity : AppCompatActivity() {
             if (profile == null) {
                 Toast.makeText(this, R.string.toast_import_failed, Toast.LENGTH_SHORT).show()
             } else {
-                disconnectVpn()
-                suppressPreferenceDirty = true
-                importProfile(profile, prefs)
-                prefs.edit().remove(ACTIVE_PROFILE_KEY).remove(EDITING_PROFILE_KEY).apply()
-                suppressPreferenceDirty = false
-                settingsDirty = false
-                invalidateOptionsMenu()
-                homeFragment.refreshProfiles()
-                Toast.makeText(this, R.string.toast_profile_imported, Toast.LENGTH_SHORT).show()
+                importExternalProfile(profile)
             }
         }
     }
@@ -117,8 +110,7 @@ class MainActivity : AppCompatActivity() {
         prefs.registerOnSharedPreferenceChangeListener { _, key ->
             if (!suppressPreferenceDirty && key != null && OscPrefKey.entries.any { it.name == key } &&
                 key !in setOf(OscPrefKey.ROOT_STATE.name, OscPrefKey.HOME_STATUS.name, OscPrefKey.HOME_CONNECTOR.name)) {
-                settingsDirty = true
-                invalidateOptionsMenu()
+                updateDirtyState()
             }
         }
 
@@ -141,8 +133,7 @@ class MainActivity : AppCompatActivity() {
         if (activeKey != null) editor.putString(ACTIVE_PROFILE_KEY, activeKey)
         editor.apply()
         suppressPreferenceDirty = false
-        settingsDirty = false
-        invalidateOptionsMenu()
+        updateDirtyState()
 
         findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.pager).setCurrentItem(1, false)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -179,19 +170,25 @@ class MainActivity : AppCompatActivity() {
         }
         val profile = prefs.getString(profileKey, null)?.let(::deserializeProfile) ?: return
         if (profile == null) return
-        val wasConnected = getBooleanPrefValue(OscPrefKey.ROOT_STATE, prefs)
+        val previousActiveKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
         suppressPreferenceDirty = true
         importProfile(profile, prefs)
         prefs.edit().putString(ACTIVE_PROFILE_KEY, profileKey).putString(EDITING_PROFILE_KEY, profileKey).apply()
         suppressPreferenceDirty = false
-        settingsDirty = false
-        invalidateOptionsMenu()
+        updateDirtyState()
         handler.post {
             if (!isFinishing && ::homeFragment.isInitialized && homeFragment.isAdded) {
                 homeFragment.refreshProfiles()
             }
         }
-        if (wasConnected) restartVpn() else connectVpn()
+        // Do not use ROOT_STATE here: it can remain true after a failed/crashed session.
+        // Every profile activation must go through VpnService.prepare() so Android can
+        // request VPN consent when necessary.
+        if (previousActiveKey != profileKey) {
+            connectVpn()
+        } else {
+            connectVpn()
+        }
     }
 
     fun showHome() {
@@ -252,8 +249,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveProfile(key: String) {
         prefs.edit().putString(key, serializeProfile(prefs)).apply()
-        settingsDirty = false
-        invalidateOptionsMenu()
+        updateDirtyState()
         homeFragment.refreshProfiles()
         if (prefs.getString(ACTIVE_PROFILE_KEY, null) == key) {
             restartVpn()
@@ -279,6 +275,52 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun importExternalProfile(profile: Profile) {
+        val activeKey = prefs.getString(ACTIVE_PROFILE_KEY, null)
+        val editingKey = prefs.getString(EDITING_PROFILE_KEY, null)
+            ?.takeIf { it.startsWith(PROFILE_KEY_HEADER) && prefs.contains(it) }
+        val targetKey = editingKey ?: activeKey ?: run {
+            val baseName = getStringPrefValue(OscPrefKey.HOME_HOSTNAME, prefs)
+                .trim()
+                .ifEmpty { getString(R.string.default_profile_name) }
+            var name = baseName
+            var index = 2
+            while (prefs.contains(PROFILE_KEY_HEADER + name)) {
+                name = "$baseName ($index)"
+                index++
+            }
+            PROFILE_KEY_HEADER + name
+        }
+
+        suppressPreferenceDirty = true
+        importProfile(profile, prefs)
+        val serialized = serializeProfile(prefs)
+        prefs.edit()
+            .putString(targetKey, serialized)
+            .putString(EDITING_PROFILE_KEY, targetKey)
+            .apply()
+        suppressPreferenceDirty = false
+        settingsDirty = false
+        invalidateOptionsMenu()
+        homeFragment.refreshProfiles()
+
+        if (activeKey == targetKey) {
+            connectVpn()
+        }
+
+        Toast.makeText(this, R.string.toast_profile_imported, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateDirtyState() {
+        val key = prefs.getString(EDITING_PROFILE_KEY, null)
+        settingsDirty = if (key.isNullOrBlank() || !prefs.contains(key)) {
+            true
+        } else {
+            prefs.getString(key, null) != serializeProfile(prefs)
+        }
+        invalidateOptionsMenu()
+    }
+
     private fun showExportDialog() {
         val filename = getStringPrefValue(OscPrefKey.HOME_HOSTNAME, prefs) + ".json"
         AlertDialog.Builder(this).setMessage(R.string.dialog_export_warning)
@@ -292,8 +334,7 @@ class MainActivity : AppCompatActivity() {
                 suppressPreferenceDirty = true
                 importProfile(null, prefs)
                 suppressPreferenceDirty = false
-                settingsDirty = true
-                invalidateOptionsMenu()
+                updateDirtyState()
             }
             .setNegativeButton(R.string.button_no, null).show()
     }
@@ -310,8 +351,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun restartVpn() {
-        val intent = Intent(this, SstpVpnService::class.java).setAction(ACTION_VPN_RESTART)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
+        // Restart through the normal connect path so VpnService.prepare() is always checked.
+        // This also avoids relying on stale ROOT_STATE after a failed/crashed session.
+        connectVpn()
     }
 
     private fun disconnectVpn() {
