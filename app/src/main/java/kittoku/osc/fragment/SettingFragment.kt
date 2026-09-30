@@ -97,10 +97,7 @@ internal class SettingFragment : PreferenceFragmentCompat() {
                 val previous = preference.onPreferenceChangeListener
                 preference.onPreferenceChangeListener = Preference.OnPreferenceChangeListener { changed, newValue ->
                     val accepted = previous?.onPreferenceChange(changed, newValue) ?: true
-                    if (accepted && !isAdded) {
-                        return@OnPreferenceChangeListener accepted
-                    }
-                    if (accepted && !isAdded.not()) {
+                    if (accepted) {
                         (activity as? MainActivity)?.markSettingsDirty()
                     }
                     accepted

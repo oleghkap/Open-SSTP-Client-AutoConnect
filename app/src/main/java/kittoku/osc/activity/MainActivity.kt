@@ -433,6 +433,13 @@ class MainActivity : AppCompatActivity() {
         return saved == null || saved != current
     }
 
+    fun markSettingsDirty() {
+        if (!suppressPreferenceDirty) {
+            settingsDirty = true
+            invalidateOptionsMenu()
+        }
+    }
+
     private fun updateDirtyState() {
         val dirty = calculateDirtyState()
         if (settingsDirty != dirty) {
