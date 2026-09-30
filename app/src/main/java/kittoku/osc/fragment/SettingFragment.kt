@@ -66,18 +66,6 @@ internal class SettingFragment : PreferenceFragmentCompat() {
         setPreferencesFromResource(R.xml.settings, rootKey)
         prefs = preferenceManager.sharedPreferences!!
 
-        bindPreferences()
-    }
-
-    fun refreshFromCurrentProfile() {
-        if (!isAdded) return
-        setPreferencesFromResource(R.xml.settings, null)
-        prefs = preferenceManager.sharedPreferences!!
-        bindPreferences()
-        installDirtyTracking(preferenceScreen)
-    }
-
-    private fun bindPreferences() {
         certDirPref = findPreference(OscPrefKey.SSL_CERT_DIR.name)!!
         logDirPref = findPreference(OscPrefKey.LOG_DIR.name)!!
         selectAppsPref = findPreference(OscPrefKey.ROUTE_SELECTED_APPS.name)!!
