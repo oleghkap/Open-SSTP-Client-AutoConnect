@@ -68,7 +68,7 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
                 val header = "OSC: ERR_UNEXPECTED"
                 bridge.service.logWriter?.report(header + "\n" + throwable.stackTraceToString())
                 bridge.service.notifyError(header)
-            }
+            })
         }
     }
 
@@ -248,7 +248,7 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
 
             bridge.service.logWriter?.report(log)
             bridge.service.notifyError(header)
-        }
+        })
 
         return false
     }
@@ -256,7 +256,7 @@ internal class Controller(internal val bridge: SharedBridge, private val generat
     internal fun disconnect() { // use if the user want to normally disconnect
         kill(false, cleanup = {
             sstpClient?.sendLastPacket(SSTP_MESSAGE_TYPE_CALL_DISCONNECT)
-        }
+        })
     }
 
     internal fun restart() {
